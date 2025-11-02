@@ -16,8 +16,8 @@ export const GAME_CONFIG = {
     SPEED: 180, // px/s
     ARM: {
       RADIUS: 5, // px
-      OFFSET_DISTANCE: 14, // khoảng cách tâm tay tới tâm thân
-      SPREAD_RAD: 0.6, // độ mở chữ V (radian), ~34°
+      OFFSET_DISTANCE: 18, // khoảng cách tâm tay tới tâm thân (tách ra khỏi thân)
+      SPREAD_RAD: 1.2, // độ mở chữ V (radian), ~57° - mở rộng hơn
       COLOR: 0x222222,
     },
     SPAWN_MARGIN: 64, // tránh spawn sát mép (>= PADDING)
