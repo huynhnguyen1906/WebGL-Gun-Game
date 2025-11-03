@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js'
 
 import { GAME_CONFIG } from '../config/gameConfig'
 import { Camera } from './Camera'
+import { HotbarUI } from './HotbarUI'
 import { InputManager } from './InputManager'
 import { GameMap } from './Map'
 import { Player } from './Player'
@@ -12,13 +13,19 @@ export class GameManager {
   private player: Player
   private camera: Camera
   private inputManager: InputManager
+  private hotbarUI: HotbarUI
   private worldContainer: PIXI.Container
+  private uiContainer: PIXI.Container
   private lastTime: number = 0
 
   constructor(app: PIXI.Application) {
     this.app = app
     this.worldContainer = new PIXI.Container()
     this.app.stage.addChild(this.worldContainer)
+
+    // Create UI container (separate from world for fixed positioning)
+    this.uiContainer = new PIXI.Container()
+    this.app.stage.addChild(this.uiContainer)
 
     // Create map
     this.gameMap = new GameMap()
@@ -34,6 +41,15 @@ export class GameManager {
 
     // Create input manager
     this.inputManager = new InputManager(this.app.canvas as HTMLCanvasElement)
+
+    // Create hotbar UI
+    this.hotbarUI = new HotbarUI(this.app.screen.width, this.app.screen.height)
+    this.uiContainer.addChild(this.hotbarUI.getContainer())
+
+    // Connect hotbar weapon change to player
+    this.hotbarUI.setWeaponChangeCallback((weapon) => {
+      this.player.setWeapon(weapon)
+    })
 
     // Setup game loop
     this.app.ticker.add(this.gameLoop)
@@ -73,8 +89,8 @@ export class GameManager {
 
     // Handle shooting
     if (this.inputManager.isMouseDown) {
-      const bullet = this.player.tryShoot(worldMouse.x, worldMouse.y, currentTime)
-      if (bullet) {
+      const bullets = this.player.tryShoot(worldMouse.x, worldMouse.y, currentTime)
+      for (const bullet of bullets) {
         this.worldContainer.addChild(bullet.getGraphics())
       }
     }
@@ -89,6 +105,7 @@ export class GameManager {
 
   private onResize = (): void => {
     this.camera.resize(this.app.screen.width, this.app.screen.height)
+    this.hotbarUI.updatePosition(this.app.screen.width, this.app.screen.height)
   }
 
   destroy(): void {
@@ -96,6 +113,7 @@ export class GameManager {
     this.app.ticker.remove(this.gameLoop)
     this.inputManager.destroy()
     this.player.destroy()
+    this.hotbarUI.destroy()
     this.app.destroy(true, { children: true })
   }
 }

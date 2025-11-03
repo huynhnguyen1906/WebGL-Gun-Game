@@ -12,18 +12,18 @@ export class Bullet {
   private maxTTL: number
   public isAlive: boolean = true
 
-  constructor(x: number, y: number, angle: number) {
+  constructor(x: number, y: number, angle: number, speed: number, range: number) {
     this.x = x
     this.y = y
 
-    const { SPEED, RANGE, RADIUS, COLOR } = GAME_CONFIG.BULLET
+    const { RADIUS, COLOR } = GAME_CONFIG.BULLET
 
     // Calculate velocity from angle
-    this.vx = Math.cos(angle) * SPEED
-    this.vy = Math.sin(angle) * SPEED
+    this.vx = Math.cos(angle) * speed
+    this.vy = Math.sin(angle) * speed
 
     // TTL = RANGE / SPEED (seconds)
-    this.maxTTL = RANGE / SPEED
+    this.maxTTL = range / speed
     this.ttl = this.maxTTL
 
     // Draw bullet

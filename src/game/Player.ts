@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js'
 
-import { GAME_CONFIG } from '../config/gameConfig'
+import { GAME_CONFIG, WeaponType } from '../config/gameConfig'
 import { Bullet } from './Bullet'
 
 export class Player {
@@ -13,6 +13,7 @@ export class Player {
   private rotation: number = 0
   private lastShootTime: number = 0
   public bullets: Bullet[] = []
+  private currentWeapon: WeaponType = WeaponType.PISTOL
 
   constructor(x: number, y: number) {
     this.x = x
@@ -114,23 +115,55 @@ export class Player {
   }
 
   // Shoot bullet
-  tryShoot(targetX: number, targetY: number, currentTime: number): Bullet | null {
-    const { COOLDOWN_MS } = GAME_CONFIG.BULLET
+  tryShoot(targetX: number, targetY: number, currentTime: number): Bullet[] {
+    const weaponConfig = GAME_CONFIG.WEAPONS[this.currentWeapon]
+    const { COOLDOWN_MS, SPEED, RANGE } = weaponConfig
 
     // Check cooldown
     if (currentTime - this.lastShootTime < COOLDOWN_MS) {
-      return null
+      return []
     }
+
+    const bullets: Bullet[] = []
 
     // Calculate angle to target
     const angle = Math.atan2(targetY - this.y, targetX - this.x)
 
-    // Create bullet
-    const bullet = new Bullet(this.x, this.y, angle)
-    this.bullets.push(bullet)
+    // Check if shotgun (multiple pellets)
+    if (this.currentWeapon === WeaponType.SHOTGUN) {
+      const shotgunConfig = GAME_CONFIG.WEAPONS[WeaponType.SHOTGUN]
+      const pelletCount = shotgunConfig.PELLET_COUNT
+      const spreadAngleDeg = shotgunConfig.SPREAD_ANGLE
+      const spreadAngleRad = (spreadAngleDeg * Math.PI) / 180
+
+      // Create pellets in a spread pattern
+      for (let i = 0; i < pelletCount; i++) {
+        // Distribute pellets evenly across the spread angle
+        const offset = (i / (pelletCount - 1) - 0.5) * spreadAngleRad
+        const pelletAngle = angle + offset
+
+        const bullet = new Bullet(this.x, this.y, pelletAngle, SPEED, RANGE)
+        this.bullets.push(bullet)
+        bullets.push(bullet)
+      }
+    } else {
+      // Single bullet
+      const bullet = new Bullet(this.x, this.y, angle, SPEED, RANGE)
+      this.bullets.push(bullet)
+      bullets.push(bullet)
+    }
 
     this.lastShootTime = currentTime
-    return bullet
+    return bullets
+  }
+
+  // Switch weapon
+  setWeapon(weapon: WeaponType): void {
+    this.currentWeapon = weapon
+  }
+
+  getCurrentWeapon(): WeaponType {
+    return this.currentWeapon
   }
 
   // Update bullets

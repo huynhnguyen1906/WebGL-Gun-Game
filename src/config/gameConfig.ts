@@ -1,3 +1,12 @@
+export const WeaponType = {
+  PISTOL: 'PISTOL',
+  RIFLE: 'RIFLE',
+  SNIPER: 'SNIPER',
+  SHOTGUN: 'SHOTGUN',
+} as const
+
+export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType]
+
 export const GAME_CONFIG = {
   MAP: {
     SIZE: 3000, // px
@@ -23,11 +32,36 @@ export const GAME_CONFIG = {
     SPAWN_MARGIN: 64, // avoid spawning too close to edge (>= PADDING)
   },
   BULLET: {
-    RADIUS: 10, // px
-    COLOR: 0x000000,
-    SPEED: 1000, // px/s (500px trong 0.5s)
-    RANGE: 1000, // px
-    COOLDOWN_MS: 300, // delay between shots
+    RADIUS: 10, // px - shared across all weapons
+    COLOR: 0x000000, // shared across all weapons
+  },
+  WEAPONS: {
+    [WeaponType.PISTOL]: {
+      NAME: 'Pistol',
+      SPEED: 700, // px/s
+      RANGE: 500, // px
+      COOLDOWN_MS: 1000, // 1 second
+    },
+    [WeaponType.RIFLE]: {
+      NAME: 'Rifle',
+      SPEED: 700, // px/s
+      RANGE: 1000, // px
+      COOLDOWN_MS: 150, // 150ms
+    },
+    [WeaponType.SNIPER]: {
+      NAME: 'Sniper',
+      SPEED: 1300, // px/s
+      RANGE: 1300, // px
+      COOLDOWN_MS: 1200, // 1.2 seconds
+    },
+    [WeaponType.SHOTGUN]: {
+      NAME: 'Shotgun',
+      SPEED: 700, // px/s
+      RANGE: 700, // px
+      COOLDOWN_MS: 1200, // 1.2 seconds
+      PELLET_COUNT: 12, // number of pellets per shot
+      SPREAD_ANGLE: 15, // degrees
+    },
   },
   TICK: {
     MAX_DT_MS: 50, // clamp dt to avoid jitter
