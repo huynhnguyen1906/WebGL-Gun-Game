@@ -1,5 +1,7 @@
 export class InputManager {
   private keys: Set<string> = new Set()
+  private pressedNumbers: Set<number> = new Set() // Track number key presses
+  private consumedNumbers: Set<number> = new Set() // Track consumed number presses
   public mouseX: number = 0
   public mouseY: number = 0
   public isMouseDown: boolean = false
@@ -28,10 +30,34 @@ export class InputManager {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     this.keys.add(e.key.toLowerCase())
+
+    // Track number keys 1-4 (top row, not numpad)
+    if (e.code === 'Digit1') this.pressedNumbers.add(1)
+    if (e.code === 'Digit2') this.pressedNumbers.add(2)
+    if (e.code === 'Digit3') this.pressedNumbers.add(3)
+    if (e.code === 'Digit4') this.pressedNumbers.add(4)
   }
 
   private onKeyUp = (e: KeyboardEvent): void => {
     this.keys.delete(e.key.toLowerCase())
+
+    // Clear number key tracking on release
+    if (e.code === 'Digit1') {
+      this.pressedNumbers.delete(1)
+      this.consumedNumbers.delete(1)
+    }
+    if (e.code === 'Digit2') {
+      this.pressedNumbers.delete(2)
+      this.consumedNumbers.delete(2)
+    }
+    if (e.code === 'Digit3') {
+      this.pressedNumbers.delete(3)
+      this.consumedNumbers.delete(3)
+    }
+    if (e.code === 'Digit4') {
+      this.pressedNumbers.delete(4)
+      this.consumedNumbers.delete(4)
+    }
   }
 
   private onMouseMove = (e: MouseEvent): void => {
@@ -83,6 +109,17 @@ export class InputManager {
       x: screenX - cameraX,
       y: screenY - cameraY,
     }
+  }
+
+  // Get pressed number key (1-4) if any, and consume it
+  getPressedNumberKey(): number | null {
+    for (const num of this.pressedNumbers) {
+      if (!this.consumedNumbers.has(num)) {
+        this.consumedNumbers.add(num)
+        return num
+      }
+    }
+    return null
   }
 
   destroy(): void {

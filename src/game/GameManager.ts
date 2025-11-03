@@ -73,6 +73,12 @@ export class GameManager {
   }
 
   private update(deltaSeconds: number, currentTime: number): void {
+    // Check for number key weapon switching (1-4)
+    const numberKey = this.inputManager.getPressedNumberKey()
+    if (numberKey !== null) {
+      this.hotbarUI.selectWeaponByIndex(numberKey - 1) // Convert 1-4 to 0-3
+    }
+
     // Update player rotation (face mouse)
     const worldMouse = this.inputManager.screenToWorld(
       this.inputManager.mouseX,
@@ -87,11 +93,14 @@ export class GameManager {
     const movement = this.inputManager.getMovementVector()
     this.player.move(deltaSeconds, movement.x, movement.y, (x, y, r) => this.gameMap.clampPosition(x, y, r))
 
-    // Handle shooting
+    // Handle shooting - only if mouse is not over hotbar UI
     if (this.inputManager.isMouseDown) {
-      const bullets = this.player.tryShoot(worldMouse.x, worldMouse.y, currentTime)
-      for (const bullet of bullets) {
-        this.worldContainer.addChild(bullet.getGraphics())
+      const isOverHotbar = this.hotbarUI.isPointInside(this.inputManager.mouseX, this.inputManager.mouseY)
+      if (!isOverHotbar) {
+        const bullets = this.player.tryShoot(worldMouse.x, worldMouse.y, currentTime)
+        for (const bullet of bullets) {
+          this.worldContainer.addChild(bullet.getGraphics())
+        }
       }
     }
 

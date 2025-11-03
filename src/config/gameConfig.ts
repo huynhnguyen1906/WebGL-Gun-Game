@@ -13,7 +13,7 @@ export const GAME_CONFIG = {
     TILE: 32, // px
     PADDING: 32, // px
     COLOR_BG: 0xf3e5ab, // map background (wheat)
-    GRID_COLOR: 0xe8d899, // grid line color (light)
+    GRID_COLOR: 0xcccccc, // grid line color (light)
   },
   CAMERA: {
     FOLLOW_LERP: 1.0, // 1.0 = snap immediately; <1.0 = smooth
@@ -32,7 +32,7 @@ export const GAME_CONFIG = {
     SPAWN_MARGIN: 64, // avoid spawning too close to edge (>= PADDING)
   },
   BULLET: {
-    RADIUS: 10, // px - shared across all weapons
+    RADIUS: 5, // px - shared across all weapons
     COLOR: 0x000000, // shared across all weapons
   },
   WEAPONS: {
@@ -60,7 +60,7 @@ export const GAME_CONFIG = {
       RANGE: 700, // px
       COOLDOWN_MS: 1200, // 1.2 seconds
       PELLET_COUNT: 12, // number of pellets per shot
-      SPREAD_ANGLE: 15, // degrees
+      SPREAD_ANGLE: 8, // degrees
     },
   },
   TICK: {

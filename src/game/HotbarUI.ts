@@ -117,6 +117,24 @@ export class HotbarUI {
     return this.weapons[this.activeSlotIndex]
   }
 
+  // Check if a screen point is inside the hotbar UI
+  public isPointInside(screenX: number, screenY: number): boolean {
+    const bounds = this.container.getBounds()
+    return (
+      screenX >= bounds.x &&
+      screenX <= bounds.x + bounds.width &&
+      screenY >= bounds.y &&
+      screenY <= bounds.y + bounds.height
+    )
+  }
+
+  // Switch weapon by index (0-3)
+  public selectWeaponByIndex(index: number): void {
+    if (index >= 0 && index < 4) {
+      this.selectSlot(index)
+    }
+  }
+
   public destroy(): void {
     this.container.destroy({ children: true })
   }

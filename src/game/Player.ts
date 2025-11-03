@@ -136,13 +136,21 @@ export class Player {
       const spreadAngleDeg = shotgunConfig.SPREAD_ANGLE
       const spreadAngleRad = (spreadAngleDeg * Math.PI) / 180
 
-      // Create pellets in a spread pattern
+      // Create pellets with random spread for realistic shotgun pattern
       for (let i = 0; i < pelletCount; i++) {
-        // Distribute pellets evenly across the spread angle
-        const offset = (i / (pelletCount - 1) - 0.5) * spreadAngleRad
-        const pelletAngle = angle + offset
+        // Random angle offset within spread range
+        const randomOffset = (Math.random() - 0.5) * spreadAngleRad
+        const pelletAngle = angle + randomOffset
 
-        const bullet = new Bullet(this.x, this.y, pelletAngle, SPEED, RANGE)
+        // Random position offset along the firing direction (front-back variation)
+        // This creates depth variation - some pellets start slightly ahead or behind
+        const depthOffset = (Math.random() - 0.5) * 20 // -10 to +10 pixels along firing direction
+        const lateralOffset = (Math.random() - 0.5) * 8 // -4 to +4 pixels perpendicular to firing
+
+        const startX = this.x + Math.cos(angle) * depthOffset + Math.cos(angle + Math.PI / 2) * lateralOffset
+        const startY = this.y + Math.sin(angle) * depthOffset + Math.sin(angle + Math.PI / 2) * lateralOffset
+
+        const bullet = new Bullet(startX, startY, pelletAngle, SPEED, RANGE)
         this.bullets.push(bullet)
         bullets.push(bullet)
       }
