@@ -22,11 +22,11 @@ export class Bullet {
     this.vx = Math.cos(angle) * SPEED
     this.vy = Math.sin(angle) * SPEED
 
-    // TTL = RANGE / SPEED (giây)
+    // TTL = RANGE / SPEED (seconds)
     this.maxTTL = RANGE / SPEED
     this.ttl = this.maxTTL
 
-    // Vẽ đạn
+    // Draw bullet
     this.graphics = new PIXI.Graphics()
     this.graphics.circle(0, 0, RADIUS)
     this.graphics.fill({ color: COLOR })
@@ -37,17 +37,17 @@ export class Bullet {
   update(deltaSeconds: number): void {
     if (!this.isAlive) return
 
-    // Di chuyển
+    // Move
     this.x += this.vx * deltaSeconds
     this.y += this.vy * deltaSeconds
 
     this.graphics.x = this.x
     this.graphics.y = this.y
 
-    // Giảm TTL
+    // Decrease TTL
     this.ttl -= deltaSeconds
 
-    // Hủy nếu hết thời gian
+    // Destroy when time runs out
     if (this.ttl <= 0) {
       this.isAlive = false
     }

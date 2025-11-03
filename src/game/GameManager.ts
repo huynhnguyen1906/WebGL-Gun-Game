@@ -49,7 +49,7 @@ export class GameManager {
     if (this.lastTime === 0) deltaMs = 0
     this.lastTime = currentTime
 
-    // Clamp delta time để tránh giật
+    // Clamp delta time to avoid jitter
     deltaMs = Math.min(deltaMs, GAME_CONFIG.TICK.MAX_DT_MS)
     const deltaSeconds = deltaMs / 1000
 

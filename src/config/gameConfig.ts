@@ -3,11 +3,11 @@ export const GAME_CONFIG = {
     SIZE: 3000, // px
     TILE: 32, // px
     PADDING: 32, // px
-    COLOR_BG: 0xf3e5ab, // nền map (wheat)
-    GRID_COLOR: 0xe8d899, // màu đường kẻ (nhạt)
+    COLOR_BG: 0xf3e5ab, // map background (wheat)
+    GRID_COLOR: 0xe8d899, // grid line color (light)
   },
   CAMERA: {
-    FOLLOW_LERP: 1.0, // 1.0 = bám ngay; <1.0 = mượt
+    FOLLOW_LERP: 1.0, // 1.0 = snap immediately; <1.0 = smooth
   },
   PLAYER: {
     RADIUS: 12, // px
@@ -16,20 +16,20 @@ export const GAME_CONFIG = {
     SPEED: 180, // px/s
     ARM: {
       RADIUS: 5, // px
-      OFFSET_DISTANCE: 18, // khoảng cách tâm tay tới tâm thân (tách ra khỏi thân)
-      SPREAD_RAD: 1.2, // độ mở chữ V (radian), ~57° - mở rộng hơn
+      OFFSET_DISTANCE: 18, // distance from arm center to body center (offset)
+      SPREAD_RAD: 1.2, // V spread angle (radians), ~57° - wider
       COLOR: 0x222222,
     },
-    SPAWN_MARGIN: 64, // tránh spawn sát mép (>= PADDING)
+    SPAWN_MARGIN: 64, // avoid spawning too close to edge (>= PADDING)
   },
   BULLET: {
-    RADIUS: 3, // px
-    COLOR: 0xffa500,
+    RADIUS: 10, // px
+    COLOR: 0x000000,
     SPEED: 1000, // px/s (500px trong 0.5s)
-    RANGE: 500, // px
-    COOLDOWN_MS: 100, // delay giữa hai phát
+    RANGE: 1000, // px
+    COOLDOWN_MS: 300, // delay between shots
   },
   TICK: {
-    MAX_DT_MS: 50, // clamp dt để tránh giật
+    MAX_DT_MS: 50, // clamp dt to avoid jitter
   },
 } as const

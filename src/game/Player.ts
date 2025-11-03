@@ -31,16 +31,16 @@ export class Player {
 
     this.body = new PIXI.Graphics()
 
-    // Shadow (nếu enabled)
+    // Shadow (if enabled)
     if (SHADOW.ENABLED) {
       this.body.circle(0, 0, RADIUS)
       this.body.fill({ color: 0x000000, alpha: SHADOW.ALPHA })
-      // Offset shadow một chút
+      // Slightly offset the shadow
       this.body.x = 2
       this.body.y = 2
     }
 
-    // Body chính
+    // Main body
     this.body.circle(0, 0, RADIUS)
     this.body.fill({ color: COLOR })
     this.body.x = 0
@@ -65,7 +65,7 @@ export class Player {
     this.container.addChild(this.leftArm)
     this.container.addChild(this.rightArm)
 
-    // Position arms sẽ update ở updateArmPositions
+    // Arm positions will be updated in updateArmPositions
     this.updateArmPositions()
   }
 
@@ -73,7 +73,7 @@ export class Player {
     const { ARM } = GAME_CONFIG.PLAYER
     const { OFFSET_DISTANCE, SPREAD_RAD } = ARM
 
-    // Tay trái và phải tạo chữ V
+    // Left and right arms form a V
     // Left arm: rotation - SPREAD_RAD/2
     const leftAngle = this.rotation - SPREAD_RAD / 2
     this.leftArm.x = Math.cos(leftAngle) * OFFSET_DISTANCE

@@ -17,20 +17,20 @@ export class GameMap {
   private drawMap(): void {
     const { SIZE, TILE, PADDING, COLOR_BG, GRID_COLOR } = GAME_CONFIG.MAP
 
-    // Vẽ background
+    // Draw background
     this.graphics.rect(0, 0, SIZE, SIZE)
     this.graphics.fill({ color: COLOR_BG })
 
-    // Vẽ grid (lưới gạch 32x32)
+    // Draw grid (32x32 tiles)
     this.graphics.stroke({ color: GRID_COLOR, width: 1 })
 
-    // Vẽ đường dọc
+    // Draw vertical lines
     for (let x = 0; x <= SIZE; x += TILE) {
       this.graphics.moveTo(x, 0)
       this.graphics.lineTo(x, SIZE)
     }
 
-    // Vẽ đường ngang
+    // Draw horizontal lines
     for (let y = 0; y <= SIZE; y += TILE) {
       this.graphics.moveTo(0, y)
       this.graphics.lineTo(SIZE, y)
@@ -38,8 +38,8 @@ export class GameMap {
 
     this.graphics.stroke()
 
-    // Vẽ padding zone (viền đỏ nhạt để debug - sẽ bỏ sau)
-    // Vùng này player không được vào
+    // Draw padding zone (light red border for debug - will remove later)
+    // This area is restricted for the player
     this.graphics.rect(0, 0, SIZE, PADDING) // top
     this.graphics.rect(0, SIZE - PADDING, SIZE, PADDING) // bottom
     this.graphics.rect(0, 0, PADDING, SIZE) // left
@@ -51,7 +51,7 @@ export class GameMap {
     return this.container
   }
 
-  // Kiểm tra xem một điểm có trong vùng hợp lệ không (không ở padding)
+  // Check if a point is in a valid area (not in padding)
   isValidPosition(x: number, y: number, radius: number = 0): boolean {
     const { SIZE, PADDING } = GAME_CONFIG.MAP
     return (
@@ -59,7 +59,7 @@ export class GameMap {
     )
   }
 
-  // Clamp position vào vùng hợp lệ
+  // Clamp position into the valid area
   clampPosition(x: number, y: number, radius: number = 0): { x: number; y: number } {
     const { SIZE, PADDING } = GAME_CONFIG.MAP
     return {
@@ -68,7 +68,7 @@ export class GameMap {
     }
   }
 
-  // Random position trong vùng hợp lệ (cho spawn)
+  // Random position within valid area (for spawn)
   getRandomValidPosition(margin: number = GAME_CONFIG.PLAYER.SPAWN_MARGIN): {
     x: number
     y: number

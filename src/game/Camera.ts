@@ -24,18 +24,18 @@ export class Camera {
     const { SIZE } = GAME_CONFIG.MAP
     const { FOLLOW_LERP } = GAME_CONFIG.CAMERA
 
-    // Tính vị trí camera muốn đến (center on target)
+    // Compute desired camera position (center on target)
     let camX = this.targetX - this.viewWidth / 2
     let camY = this.targetY - this.viewHeight / 2
 
-    // Clamp để không lộ viền ngoài map
+    // Clamp so map borders are not revealed
     const maxCamX = SIZE - this.viewWidth
     const maxCamY = SIZE - this.viewHeight
 
     camX = Math.max(0, Math.min(maxCamX, camX))
     camY = Math.max(0, Math.min(maxCamY, camY))
 
-    // Lerp để smooth (nếu FOLLOW_LERP < 1)
+    // Lerp for smoothing (if FOLLOW_LERP < 1)
     const currentX = -this.container.x
     const currentY = -this.container.y
 
