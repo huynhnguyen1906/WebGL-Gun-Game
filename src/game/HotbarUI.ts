@@ -1,14 +1,15 @@
 import * as PIXI from 'pixi.js'
 
-import { GAME_CONFIG, WeaponType } from '../config/gameConfig'
+import { WEAPONS } from '../config/serverConfig'
+import type { WeaponTypeValue } from '../config/serverConfig'
 
 export class HotbarUI {
   private container: PIXI.Container
   private slots: PIXI.Graphics[] = []
   private labels: PIXI.Text[] = []
   private activeSlotIndex: number = 0
-  private weapons: WeaponType[] = [WeaponType.PISTOL, WeaponType.RIFLE, WeaponType.SNIPER, WeaponType.SHOTGUN]
-  private onWeaponChange?: (weapon: WeaponType) => void
+  private weapons: WeaponTypeValue[]
+  private onWeaponChange?: (weapon: WeaponTypeValue) => void
 
   // UI styling constants
   private readonly SLOT_SIZE = 60
@@ -20,14 +21,17 @@ export class HotbarUI {
 
   constructor(screenWidth: number, screenHeight: number) {
     this.container = new PIXI.Container()
+    // Get weapons from serverConfig
+    this.weapons = WEAPONS.map((w) => w.id)
     this.createSlots()
     this.updatePosition(screenWidth, screenHeight)
   }
 
   private createSlots(): void {
-    const totalWidth = this.SLOT_SIZE * 4 + this.SLOT_SPACING * 3
+    const slotCount = this.weapons.length
+    const totalWidth = this.SLOT_SIZE * slotCount + this.SLOT_SPACING * (slotCount - 1)
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < slotCount; i++) {
       // Create slot background
       const slot = new PIXI.Graphics()
       const x = i * (this.SLOT_SIZE + this.SLOT_SPACING)
@@ -46,7 +50,7 @@ export class HotbarUI {
       this.slots.push(slot)
 
       // Create weapon label
-      const weaponName = GAME_CONFIG.WEAPONS[this.weapons[i]].NAME
+      const weaponName = WEAPONS[i].name
       const label = new PIXI.Text({
         text: weaponName,
         style: {
@@ -99,7 +103,7 @@ export class HotbarUI {
     }
   }
 
-  public setWeaponChangeCallback(callback: (weapon: WeaponType) => void): void {
+  public setWeaponChangeCallback(callback: (weapon: WeaponTypeValue) => void): void {
     this.onWeaponChange = callback
   }
 
@@ -113,7 +117,7 @@ export class HotbarUI {
     return this.container
   }
 
-  public getCurrentWeapon(): WeaponType {
+  public getCurrentWeapon(): WeaponTypeValue {
     return this.weapons[this.activeSlotIndex]
   }
 
@@ -130,7 +134,7 @@ export class HotbarUI {
 
   // Switch weapon by index (0-3)
   public selectWeaponByIndex(index: number): void {
-    if (index >= 0 && index < 4) {
+    if (index >= 0 && index < this.weapons.length) {
       this.selectSlot(index)
     }
   }

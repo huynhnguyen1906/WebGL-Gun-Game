@@ -1,11 +1,10 @@
-export const WeaponType = {
-  PISTOL: 'PISTOL',
-  RIFLE: 'RIFLE',
-  SNIPER: 'SNIPER',
-  SHOTGUN: 'SHOTGUN',
-} as const
-
-export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType]
+/**
+ * Game Configuration (Client-only, visual)
+ *
+ * Chứa các config về visual, rendering, UI.
+ * Không chứa game logic như damage, HP, cooldown.
+ * Các config về game logic nằm trong serverConfig.ts
+ */
 
 export const GAME_CONFIG = {
   MAP: {
@@ -22,7 +21,6 @@ export const GAME_CONFIG = {
     RADIUS: 12, // px
     COLOR: 0x222222,
     SHADOW: { ENABLED: true, BLUR: 4, ALPHA: 0.25 },
-    SPEED: 180, // px/s
     ARM: {
       RADIUS: 5, // px
       OFFSET_DISTANCE: 18, // distance from arm center to body center (offset)
@@ -31,39 +29,37 @@ export const GAME_CONFIG = {
     },
     SPAWN_MARGIN: 64, // avoid spawning too close to edge (>= PADDING)
   },
+  DUMMY: {
+    RADIUS: 12, // px (same as player)
+    COLOR: 0xcc4444, // Red-ish color to distinguish from player
+    SHADOW: { ENABLED: true, BLUR: 4, ALPHA: 0.25 },
+    ARM: {
+      RADIUS: 5,
+      OFFSET_DISTANCE: 18,
+      SPREAD_RAD: 1.2,
+      COLOR: 0xcc4444,
+    },
+  },
   BULLET: {
     RADIUS: 5, // px - shared across all weapons
     COLOR: 0x000000, // shared across all weapons
   },
-  WEAPONS: {
-    [WeaponType.PISTOL]: {
-      NAME: 'Pistol',
-      SPEED: 700, // px/s
-      RANGE: 500, // px
-      COOLDOWN_MS: 1000, // 1 second
-    },
-    [WeaponType.RIFLE]: {
-      NAME: 'Rifle',
-      SPEED: 700, // px/s
-      RANGE: 1000, // px
-      COOLDOWN_MS: 150, // 150ms
-    },
-    [WeaponType.SNIPER]: {
-      NAME: 'Sniper',
-      SPEED: 1300, // px/s
-      RANGE: 1300, // px
-      COOLDOWN_MS: 1200, // 1.2 seconds
-    },
-    [WeaponType.SHOTGUN]: {
-      NAME: 'Shotgun',
-      SPEED: 700, // px/s
-      RANGE: 700, // px
-      COOLDOWN_MS: 1200, // 1.2 seconds
-      PELLET_COUNT: 12, // number of pellets per shot
-      SPREAD_ANGLE: 8, // degrees
-    },
-  },
   TICK: {
     MAX_DT_MS: 50, // clamp dt to avoid jitter
+  },
+  UI: {
+    HP_BAR: {
+      WIDTH: 40,
+      HEIGHT: 4,
+      OFFSET_Y: -20, // Above entity
+      BG_COLOR: 0x333333,
+      FILL_COLOR: 0x44cc44,
+      LOW_HP_COLOR: 0xcc4444, // When HP < 30%
+    },
+    SCORE: {
+      FONT_SIZE: 18,
+      COLOR: 0xffffff,
+      PADDING: 20,
+    },
   },
 } as const

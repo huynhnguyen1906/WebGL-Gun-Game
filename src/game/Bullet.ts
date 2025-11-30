@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js'
 
 import { GAME_CONFIG } from '../config/gameConfig'
+import type { BaseEntity } from './BaseEntity'
 
 export class Bullet {
   private graphics: PIXI.Graphics
@@ -11,10 +12,22 @@ export class Bullet {
   private ttl: number // time to live (seconds)
   private maxTTL: number
   public isAlive: boolean = true
+  public damage: number
+  public owner: BaseEntity // Reference to the entity that fired this bullet
 
-  constructor(x: number, y: number, angle: number, speed: number, range: number) {
+  constructor(
+    x: number,
+    y: number,
+    angle: number,
+    speed: number,
+    range: number,
+    damage: number = 0,
+    owner: BaseEntity
+  ) {
     this.x = x
     this.y = y
+    this.damage = damage
+    this.owner = owner
 
     const { RADIUS, COLOR } = GAME_CONFIG.BULLET
 
@@ -55,6 +68,10 @@ export class Bullet {
 
   getGraphics(): PIXI.Graphics {
     return this.graphics
+  }
+
+  getRadius(): number {
+    return GAME_CONFIG.BULLET.RADIUS
   }
 
   destroy(): void {
