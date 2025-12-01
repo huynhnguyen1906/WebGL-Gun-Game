@@ -41,8 +41,14 @@ export const GAME_CONFIG = {
     },
   },
   BULLET: {
-    RADIUS: 5, // px - shared across all weapons
-    COLOR: 0x000000, // shared across all weapons
+    HEAD_WIDTH: 2.5, // px - width at head (thicker)
+    TAIL_WIDTH: 1.5, // px - width at tail (thinner)
+    MAX_LENGTH: 200, // px - maximum trail length
+    GROW_DISTANCE: 500, // px - distance to reach max length
+    COLOR: 0x323332, // trail color (light gray)
+    HEAD_ALPHA: 0.9, // opacity at head
+    TAIL_ALPHA: 0, // opacity at tail (faded)
+    SEGMENTS: 10, // number of segments for gradient effect
   },
   TICK: {
     MAX_DT_MS: 50, // clamp dt to avoid jitter

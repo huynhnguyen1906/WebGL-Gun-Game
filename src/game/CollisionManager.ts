@@ -26,7 +26,7 @@ export interface KillResult {
 export class CollisionManager {
   // Check collision between a bullet and an entity
   private checkBulletEntityCollision(bullet: Bullet, entity: BaseEntity): boolean {
-    if (!bullet.isAlive || !entity.isAlive()) return false
+    if (!bullet.isAlive || bullet.isShrinking || !entity.isAlive()) return false
 
     // Don't hit the owner of the bullet
     if (bullet.owner === entity) return false
@@ -58,8 +58,8 @@ export class CollisionManager {
             damage: bullet.damage,
           })
 
-          // Mark bullet as dead after hit
-          bullet.isAlive = false
+          // Start shrinking animation instead of instant death
+          bullet.onHit()
           break // Each bullet can only hit one entity
         }
       }
