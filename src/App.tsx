@@ -7,9 +7,19 @@ import { GameManager } from './game/GameManager'
 function App() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const gameManagerRef = useRef<GameManager | null>(null)
+  const isInitializedRef = useRef(false)
 
   useEffect(() => {
-    if (!canvasRef.current) return
+    if (!canvasRef.current || isInitializedRef.current) return
+
+    // Prevent double initialization in React Strict Mode
+    isInitializedRef.current = true
+
+    // Multiplayer mode by default, use ?singleplayer=true to play offline
+    const urlParams = new URLSearchParams(window.location.search)
+    const isMultiplayer = urlParams.get('singleplayer') !== 'true'
+
+    console.log(`Starting game in ${isMultiplayer ? 'MULTIPLAYER' : 'SINGLE PLAYER'} mode`)
 
     // Create PixiJS application
     const app = new PIXI.Application()
@@ -25,20 +35,22 @@ function App() {
         autoDensity: true,
       })
       .then(() => {
-        if (canvasRef.current) {
+        if (canvasRef.current && isInitializedRef.current) {
           canvasRef.current.appendChild(app.canvas as HTMLCanvasElement)
 
-          // Create game manager
-          gameManagerRef.current = new GameManager(app)
+          // Create game manager with multiplayer flag
+          gameManagerRef.current = new GameManager(app, isMultiplayer)
         }
       })
 
     // Cleanup on unmount
     return () => {
+      console.log('Cleaning up game...')
       if (gameManagerRef.current) {
         gameManagerRef.current.destroy()
         gameManagerRef.current = null
       }
+      isInitializedRef.current = false
     }
   }, [])
 

@@ -109,7 +109,7 @@ export class PlayerInventory {
       this.slots.set(SlotType.SECONDARY, {
         slotNumber: SlotType.SECONDARY,
         weaponType: WeaponType.PISTOL,
-        ammo: { magazine: 7, reserve: 999 }, // 7 rounds in mag, infinite reserve
+        ammo: { magazine, reserve }, // Use actual data from server
       })
       return true
     }

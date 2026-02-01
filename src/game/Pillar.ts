@@ -13,7 +13,7 @@ export class Pillar {
   private graphics!: PIXI.Graphics // Initialized in createGraphics()
   public x: number
   public y: number
-  private radius: number
+  public radius: number
 
   constructor(x: number, y: number) {
     this.x = x

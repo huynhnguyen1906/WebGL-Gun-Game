@@ -27,6 +27,7 @@ export abstract class ItemPickup {
   protected container: PIXI.Container
   protected sprite: PIXI.Sprite | null = null
   public isPickedUp: boolean = false
+  private isDestroyed: boolean = false
   public abstract itemType: ItemTypeValue
 
   constructor(x: number, y: number) {
@@ -93,11 +94,14 @@ export abstract class ItemPickup {
     const bounceHeight = 8
 
     const animate = () => {
-      if (this.isPickedUp) return
+      // Stop animation if picked up or destroyed
+      if (this.isPickedUp || this.isDestroyed) return
 
       time += bounceSpeed
       // Bounce the entire container for smooth effect
-      this.container.y = this.y + Math.sin(time) * bounceHeight
+      if (this.container && !this.container.destroyed) {
+        this.container.y = this.y + Math.sin(time) * bounceHeight
+      }
 
       requestAnimationFrame(animate)
     }
@@ -128,7 +132,12 @@ export abstract class ItemPickup {
   }
 
   public destroy(): void {
-    this.container.destroy({ children: true })
+    // Stop animation before destroying
+    this.isDestroyed = true
+
+    if (this.container && !this.container.destroyed) {
+      this.container.destroy({ children: true })
+    }
   }
 }
 

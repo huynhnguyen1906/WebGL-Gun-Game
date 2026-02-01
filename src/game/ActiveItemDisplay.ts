@@ -81,8 +81,10 @@ export class ActiveItemDisplay {
       await this.loadIcon('/medkit.svg')
     } else if (weapon) {
       if (ammo) {
-        if (ammo.magazine === 999) {
-          this.ammoText.text = '∞'
+        // Check if weapon has infinite ammo (e.g., Pistol)
+        if (weapon.infiniteAmmo) {
+          this.ammoText.text = `${ammo.magazine} / ∞`
+          this.ammoText.style.fill = 0x000000
         } else {
           this.ammoText.text = `${ammo.magazine} / ${ammo.reserve}`
           // Color warning if low ammo

@@ -398,6 +398,8 @@ export abstract class BaseEntity {
   // Set weapon
   setWeapon(weaponId: WeaponTypeValue): void {
     this.currentWeaponId = weaponId
+    // Update visual immediately to show/hide weapon line
+    this.updateArmPositions()
   }
 
   getCurrentWeaponId(): WeaponTypeValue {

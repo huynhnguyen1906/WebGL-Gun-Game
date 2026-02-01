@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js'
 
 import { GAME_CONFIG } from '../config/gameConfig'
-import { HEALING_CONFIG, WEAPONS } from '../config/serverConfig'
+import { HEALING_CONFIG, WEAPONS, WeaponType, type WeaponTypeValue } from '../config/serverConfig'
 import { ActiveItemDisplay } from './ActiveItemDisplay'
 import { BaseEntity } from './BaseEntity'
 import { Camera } from './Camera'
@@ -16,11 +16,22 @@ import { HealingPickup, ItemType, WeaponPickup } from './ItemPickup'
 import { ItemSpawnManager } from './ItemSpawnManager'
 import { GameMap } from './Map'
 import { MiniMap } from './MiniMap'
+import {
+  type BulletData,
+  type DamageData,
+  type InitData,
+  type ItemData,
+  NetworkManager,
+  type PlayerData,
+  type StateData,
+} from './NetworkManager'
 import { PickupPromptUI } from './PickupPromptUI'
 import { Player } from './Player'
 import { PlayerInventory, type SlotTypeValue } from './PlayerInventory'
 import { ReloadUI } from './ReloadUI'
+import { RemotePlayer } from './RemotePlayer'
 import { ScoreUI } from './ScoreUI'
+import { ServerBoxManager } from './ServerBoxManager'
 
 export class GameManager {
   private app: PIXI.Application
@@ -32,22 +43,28 @@ export class GameManager {
   private activeItemDisplay: ActiveItemDisplay
   private scoreUI: ScoreUI
   private gameOverUI: GameOverUI
-  private dummyManager: DummyManager
+  private dummyManager: DummyManager | null = null
   private collisionManager: CollisionManager
-  private itemSpawnManager: ItemSpawnManager
+  private itemSpawnManager: ItemSpawnManager | null = null
+  private serverBoxManager: ServerBoxManager | null = null
   private playerInventory: PlayerInventory
   private pickupPromptUI: PickupPromptUI
   private healingChannelUI: HealingChannelUI
   private reloadUI: ReloadUI
   private miniMap: MiniMap
+  private networkManager: NetworkManager | null = null
+  private remotePlayers: Map<number, RemotePlayer> = new Map()
+  private isMultiplayer: boolean = false
   private worldContainer: PIXI.Container
   private uiContainer: PIXI.Container
   private lastTime: number = 0
   private isGameOver: boolean = false
   private lastMeleeAttackTime: number = 0
+  private lastShootTime: number = 0 // Track shooting cooldown
 
-  constructor(app: PIXI.Application) {
+  constructor(app: PIXI.Application, multiplayer: boolean = false) {
     this.app = app
+    this.isMultiplayer = multiplayer
     this.worldContainer = new PIXI.Container()
     this.app.stage.addChild(this.worldContainer)
 
@@ -73,16 +90,21 @@ export class GameManager {
     // Create collision manager
     this.collisionManager = new CollisionManager()
 
-    // Create dummy manager and spawn dummies
-    this.dummyManager = new DummyManager(this.gameMap, this.worldContainer)
-    this.dummyManager.spawnInitialDummies(this.player.x, this.player.y)
+    // Multiplayer mode: disable bots and items, will be controlled by server
+    if (!this.isMultiplayer) {
+      // Single player mode: spawn bots and items
+      this.dummyManager = new DummyManager(this.gameMap, this.worldContainer)
+      this.dummyManager.spawnInitialDummies(this.player.x, this.player.y)
+
+      this.itemSpawnManager = new ItemSpawnManager(this.gameMap, this.worldContainer)
+      this.itemSpawnManager.spawnInitialItems(this.player.x, this.player.y, 500)
+    } else {
+      // Multiplayer mode: use server-side boxes and items
+      this.serverBoxManager = new ServerBoxManager(this.worldContainer)
+    }
 
     // Create player inventory and set to hotbar
     this.playerInventory = new PlayerInventory()
-
-    // Create item spawn manager and spawn items
-    this.itemSpawnManager = new ItemSpawnManager(this.gameMap, this.worldContainer)
-    this.itemSpawnManager.spawnInitialItems(this.player.x, this.player.y, 500)
 
     // Create UI elements
     this.hotbarUI = new HotbarUI(this.app.screen.width, this.app.screen.height)
@@ -122,6 +144,315 @@ export class GameManager {
 
     // Handle resize
     window.addEventListener('resize', this.onResize)
+
+    // Initialize multiplayer if enabled
+    if (this.isMultiplayer) {
+      this.initMultiplayer().catch((error) => {
+        console.error('Failed to initialize multiplayer:', error)
+        alert('Could not connect to server. Starting in offline mode.')
+        this.isMultiplayer = false
+        // Spawn bots and items for offline mode
+        this.dummyManager = new DummyManager(this.gameMap, this.worldContainer)
+        this.dummyManager.spawnInitialDummies(this.player.x, this.player.y)
+        this.itemSpawnManager = new ItemSpawnManager(this.gameMap, this.worldContainer)
+        this.itemSpawnManager.spawnInitialItems(this.player.x, this.player.y, 500)
+      })
+    }
+  }
+
+  // Initialize multiplayer connection
+  private async initMultiplayer(): Promise<void> {
+    this.networkManager = new NetworkManager()
+
+    // Setup callbacks
+    this.networkManager.onInit = async (data: InitData) => {
+      console.log('🎮 Multiplayer initialized!')
+      console.log('My player ID:', data.playerId)
+      console.log('My position:', data.player)
+      console.log('Other players count:', data.players.length)
+      console.log('Other players data:', data.players)
+
+      // Spawn other players (server already filters out self)
+      for (const playerData of data.players) {
+        console.log(`📍 Spawning remote player ${playerData.id} at (${playerData.x}, ${playerData.y})`)
+        this.spawnRemotePlayer(playerData)
+      }
+
+      // Load boxes, pillars, and items from server
+      if (this.serverBoxManager) {
+        if (data.boxes && data.pillars) {
+          await this.serverBoxManager.initBoxesAndPillars(data.boxes, data.pillars)
+        }
+        if (data.items) {
+          await this.serverBoxManager.initItems(data.items)
+        }
+      }
+
+      console.log('✅ Remote players spawned:', this.remotePlayers.size)
+    }
+
+    this.networkManager.onPlayerJoined = (playerData: PlayerData) => {
+      console.log(`👥 New player joined: ID ${playerData.id} at (${playerData.x}, ${playerData.y})`)
+      this.spawnRemotePlayer(playerData)
+    }
+
+    this.networkManager.onPlayerMoved = (playerData: PlayerData) => {
+      // Update specific remote player position
+      const remotePlayer = this.remotePlayers.get(playerData.id)
+      if (remotePlayer) {
+        remotePlayer.updateFromServer(
+          playerData.x,
+          playerData.y,
+          playerData.rotation,
+          playerData.direction,
+          playerData.isMoving
+        )
+      }
+    }
+
+    this.networkManager.onPlayerLeft = (playerId: number) => {
+      console.log(`👋 Player left: ID ${playerId}`)
+      this.removeRemotePlayer(playerId)
+    }
+
+    this.networkManager.onStateUpdate = (state: StateData) => {
+      // Fallback: Only update remote players from state if needed (for initial sync)
+      // Primary updates come from player:moved events
+      this.updateRemotePlayers(state.players)
+    }
+
+    this.networkManager.onBullets = (data: BulletData) => {
+      // Check if bullets are from local player or remote player
+      if (data.playerId === this.networkManager?.getPlayerId()) {
+        // Local player bullets from server (authoritative)
+        // Clear client prediction bullets and use server bullets instead
+        for (const bulletData of data.bullets) {
+          const bullet = this.player.createBulletFromServer(bulletData)
+          this.worldContainer.addChild(bullet.getGraphics())
+        }
+      } else {
+        // Remote player bullets
+        const remotePlayer = this.remotePlayers.get(data.playerId)
+        if (remotePlayer) {
+          for (const bulletData of data.bullets) {
+            const bullet = remotePlayer.createBulletFromServer(bulletData)
+            this.worldContainer.addChild(bullet.getGraphics())
+          }
+        }
+      }
+    }
+
+    this.networkManager.onWeaponChanged = (data: { playerId: number; weapon: string }) => {
+      const remotePlayer = this.remotePlayers.get(data.playerId)
+      if (remotePlayer) {
+        remotePlayer.setCurrentWeapon(data.weapon)
+      }
+    }
+
+    this.networkManager.onDamage = (data: DamageData) => {
+      // Apply damage to local or remote player
+      if (data.targetId === this.networkManager?.getPlayerId()) {
+        // Damage to local player
+        this.player.takeDamage(data.damage)
+
+        // Check if local player died
+        if (this.player.getHp() <= 0) {
+          this.handleLocalPlayerDeath()
+        }
+      } else {
+        // Damage to remote player
+        const remotePlayer = this.remotePlayers.get(data.targetId)
+        if (remotePlayer) {
+          remotePlayer.takeDamage(data.damage)
+        }
+      }
+    }
+
+    this.networkManager.onPlayerDied = (data: { playerId: number; killerId: number }) => {
+      // Handle remote player death
+      const remotePlayer = this.remotePlayers.get(data.playerId)
+      if (remotePlayer) {
+        remotePlayer.setDead(true)
+        // Optional: Add death animation/effects here
+        console.log(`Player ${data.playerId} was killed by Player ${data.killerId}`)
+      }
+    }
+
+    this.networkManager.onPlayerRespawned = (data: { playerId: number; x: number; y: number; hp: number }) => {
+      if (data.playerId === this.networkManager?.getPlayerId()) {
+        // Local player respawned
+        this.player.respawn(data.x, data.y)
+        this.isGameOver = false
+        console.log('You respawned!')
+      } else {
+        // Remote player respawned
+        const remotePlayer = this.remotePlayers.get(data.playerId)
+        if (remotePlayer) {
+          remotePlayer.respawn(data.x, data.y)
+          remotePlayer.setDead(false)
+          console.log(`Player ${data.playerId} respawned`)
+        }
+      }
+    }
+
+    this.networkManager.onItemPicked = (data: { itemId: number; playerId: number }) => {
+      // Remove item from world
+      if (this.serverBoxManager) {
+        this.serverBoxManager.removeItem(data.itemId)
+      }
+    }
+
+    this.networkManager.onInventoryUpdate = (data: any) => {
+      // Sync inventory from server
+
+      // Update primary weapon
+      if (data.inventory.primary) {
+        this.playerInventory.addWeapon(
+          data.inventory.primary.id as WeaponTypeValue,
+          data.inventory.primary.magazine,
+          data.inventory.primary.reserve
+        )
+      }
+
+      // Update pistol
+      if (data.inventory.pistol) {
+        this.playerInventory.addWeapon(
+          data.inventory.pistol.id as WeaponTypeValue,
+          data.inventory.pistol.magazine,
+          data.inventory.pistol.reserve
+        )
+      }
+
+      // Update healing count
+      if (data.inventory.healing > 0) {
+        // Reset and add healing items
+        const healingSlot = this.playerInventory['slots'].get(3) // SlotType.HEALING
+        if (healingSlot) {
+          healingSlot.healingCount = data.inventory.healing
+        }
+      }
+
+      // IMPORTANT: Switch to weapon AFTER adding it to inventory
+      const weaponData = WEAPONS.find((w) => w.id === data.currentWeapon)
+      if (weaponData) {
+        // Update player weapon first (pass ID, not entire object)
+        this.player.setWeapon(weaponData.id)
+
+        // Then switch to correct slot
+        if (weaponData.id === WeaponType.PISTOL) {
+          this.playerInventory.switchToSlot(2) // SlotType.SECONDARY
+        } else if (weaponData.isMelee) {
+          this.playerInventory.switchToSlot(4) // SlotType.FIST
+        } else {
+          this.playerInventory.switchToSlot(1) // SlotType.PRIMARY
+        }
+
+        // Broadcast weapon change to server in multiplayer
+        if (this.isMultiplayer && this.networkManager?.isConnected()) {
+          this.networkManager.sendWeaponSwitch(weaponData.id)
+        }
+      }
+
+      // Force immediate UI update
+      this.hotbarUI.updateDisplay()
+      this.activeItemDisplay.updateDisplay()
+    }
+
+    this.networkManager.onBoxDamaged = (data: { boxId: number; hp: number; isDestroyed: boolean }) => {
+      if (this.serverBoxManager) {
+        this.serverBoxManager.damageBox(data.boxId, data.hp, data.isDestroyed)
+      }
+    }
+
+    this.networkManager.onItemDropped = async (item: ItemData) => {
+      if (this.serverBoxManager) {
+        await this.serverBoxManager.spawnItem(item)
+      }
+    }
+
+    this.networkManager.onReloadComplete = (data: { weapon: string; magazine: number; reserve: number }) => {
+      // Update ammo display
+      const currentWeapon = this.playerInventory.getCurrentWeapon()
+      if (currentWeapon && currentWeapon.id === data.weapon) {
+        const ammo = this.playerInventory.getCurrentAmmo()
+        if (ammo) {
+          ammo.magazine = data.magazine
+          ammo.reserve = data.reserve
+          this.hotbarUI.updateDisplay()
+          this.activeItemDisplay.updateDisplay()
+        }
+      }
+      // Hide reload UI
+      this.reloadUI.stopReload()
+    }
+
+    this.networkManager.onAmmoUpdate = (data: { weapon: string; magazine: number; reserve: number }) => {
+      // Update ammo after shooting
+      const currentWeapon = this.playerInventory.getCurrentWeapon()
+      if (currentWeapon && currentWeapon.id === data.weapon) {
+        const ammo = this.playerInventory.getCurrentAmmo()
+        if (ammo) {
+          ammo.magazine = data.magazine
+          ammo.reserve = data.reserve
+          this.hotbarUI.updateDisplay()
+          this.activeItemDisplay.updateDisplay()
+        }
+      }
+    }
+
+    // Connect to server
+    await this.networkManager.connect()
+  }
+
+  // Handle local player death
+  private handleLocalPlayerDeath(): void {
+    console.log('You died!')
+    this.isGameOver = true
+
+    // Auto-respawn after 3 seconds in multiplayer
+    setTimeout(() => {
+      if (this.networkManager?.isConnected()) {
+        this.networkManager.sendRespawn()
+      }
+    }, 3000)
+  }
+
+  // Spawn remote player
+  private spawnRemotePlayer(playerData: PlayerData): void {
+    console.log(`Spawning remote player ${playerData.id} at (${playerData.x}, ${playerData.y})`)
+    const remotePlayer = new RemotePlayer(playerData.id, playerData.x, playerData.y)
+    this.remotePlayers.set(playerData.id, remotePlayer)
+    this.worldContainer.addChild(remotePlayer.getContainer())
+    console.log(`Remote player ${playerData.id} spawned. Current position: (${remotePlayer.x}, ${remotePlayer.y})`)
+  }
+
+  // Remove remote player
+  private removeRemotePlayer(playerId: number): void {
+    const remotePlayer = this.remotePlayers.get(playerId)
+    if (remotePlayer) {
+      remotePlayer.destroy()
+      this.remotePlayers.delete(playerId)
+      console.log('Remote player removed:', playerId)
+    }
+  }
+
+  // Update remote players from server state
+  private updateRemotePlayers(players: PlayerData[]): void {
+    for (const playerState of players) {
+      // Skip self
+      if (playerState.id === this.networkManager?.getPlayerId()) continue
+
+      const remotePlayer = this.remotePlayers.get(playerState.id)
+      if (remotePlayer) {
+        // Update HP from state (position comes from player:moved events)
+        if (playerState.hp !== undefined) {
+          remotePlayer.setHp(playerState.hp)
+        }
+      } else {
+        // Player not found, might be a new player that joined
+        console.warn(`Remote player ${playerState.id} not found in remotePlayers map`)
+      }
+    }
   }
 
   private gameLoop = (): void => {
@@ -153,6 +484,11 @@ export class GameManager {
         const weapon = this.playerInventory.getCurrentWeapon()
         if (weapon) {
           this.player.setWeapon(weapon.id)
+
+          // Send weapon switch to server in multiplayer
+          if (this.isMultiplayer && this.networkManager?.isConnected()) {
+            this.networkManager.sendWeaponSwitch(weapon.id)
+          }
         }
         // Update UI
         this.hotbarUI.updateDisplay()
@@ -166,9 +502,14 @@ export class GameManager {
       if (weapon && weapon.reloadTimeMs) {
         const ammo = this.playerInventory.getCurrentAmmo()
         // Check if can reload
-        if (ammo && ammo.magazine < (weapon.magazineSize || 0) && ammo.reserve > 0) {
+        if (ammo && ammo.magazine < (weapon.magazineSize || 0) && (ammo.reserve > 0 || weapon.infiniteAmmo)) {
           // Start reload animation
           this.reloadUI.startReload(currentTime, weapon.reloadTimeMs)
+
+          // Send reload request to server in multiplayer
+          if (this.isMultiplayer && this.networkManager?.isConnected()) {
+            this.networkManager.sendReload(weapon.id)
+          }
         }
       }
     }
@@ -176,8 +517,8 @@ export class GameManager {
     // Update reload progress
     if (this.reloadUI.isActive()) {
       const reloadComplete = this.reloadUI.updateReload(currentTime, this.player.x, this.player.y)
-      if (reloadComplete) {
-        // Actually reload
+      if (reloadComplete && !this.isMultiplayer) {
+        // Actually reload (single player only, multiplayer handled by server)
         this.playerInventory.reload(this.playerInventory.currentSlot)
         this.hotbarUI.updateDisplay()
         this.activeItemDisplay.updateDisplay()
@@ -198,8 +539,26 @@ export class GameManager {
     const movement = this.inputManager.getMovementVector()
     const isMoving = movement.x !== 0 || movement.y !== 0
 
-    // Update player movement
+    // Update player movement (client prediction)
     this.player.move(deltaSeconds, movement.x, movement.y, (x, y, r) => this.gameMap.clampPosition(x, y, r))
+
+    // Send position to server in multiplayer mode (every frame like reference)
+    if (this.isMultiplayer && this.networkManager?.isConnected()) {
+      // Determine direction based on last movement
+      let direction: 'up' | 'down' | 'left' | 'right' = 'down'
+      if (movement.y < 0) direction = 'up'
+      else if (movement.y > 0) direction = 'down'
+      else if (movement.x < 0) direction = 'left'
+      else if (movement.x > 0) direction = 'right'
+
+      this.networkManager.sendPosition({
+        x: this.player.x,
+        y: this.player.y,
+        rotation: angle,
+        direction,
+        isMoving,
+      })
+    }
 
     // Check if player moved during healing
     if (this.healingChannelUI.isActive() && isMoving) {
@@ -231,8 +590,17 @@ export class GameManager {
       }
     }
 
-    // Update dummy manager with player position
-    this.dummyManager.updatePlayerPosition(this.player.x, this.player.y)
+    // Update dummy manager with player position (only in single player)
+    if (!this.isMultiplayer && this.dummyManager) {
+      this.dummyManager.updatePlayerPosition(this.player.x, this.player.y)
+    }
+
+    // Update remote players (only in multiplayer)
+    if (this.isMultiplayer) {
+      for (const remotePlayer of this.remotePlayers.values()) {
+        remotePlayer.update(deltaSeconds)
+      }
+    }
 
     // Handle attack/shooting
     if (this.inputManager.isMouseDown && !this.healingChannelUI.isActive()) {
@@ -240,31 +608,64 @@ export class GameManager {
       if (!isOverHotbar) {
         // Check if melee or ranged
         if (this.playerInventory.isCurrentSlotMelee()) {
-          // Melee attack - hit entities
-          const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
-          this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, allEntities)
+          // Melee attack
+          if (this.isMultiplayer) {
+            // In multiplayer, send to server for hit validation
+            const weapon = this.playerInventory.getCurrentWeapon()
+            if (weapon) {
+              this.networkManager?.sendShoot(weapon.id, angle)
+            }
 
-          // If attack happened (hit something or cooldown passed), also check boxes
+            // Still play animation locally (no damage, just visual)
+            const emptyEntities: BaseEntity[] = [] // Don't damage players locally in multiplayer
+            this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, emptyEntities)
+          } else {
+            // Single player - hit entities locally
+            const allEntities: BaseEntity[] = [this.player, ...this.dummyManager!.getAliveDummies()]
+            this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, allEntities)
+          }
+
+          // Check box melee attack
           if (currentTime - this.lastMeleeAttackTime >= 500) {
             this.checkMeleeBoxAttack()
             this.lastMeleeAttackTime = currentTime
           }
         } else {
-          // Ranged attack - check ammo
+          // Ranged attack - check ammo and cooldown
+          const weapon = this.playerInventory.getCurrentWeapon()
           const ammo = this.playerInventory.getCurrentAmmo()
-          if (ammo && ammo.magazine > 0) {
-            const bullets = this.player.tryShoot(worldMouse.x, worldMouse.y, currentTime)
-            if (bullets.length > 0) {
-              // Consume ammo
-              this.playerInventory.consumeAmmo(this.playerInventory.currentSlot)
-              this.hotbarUI.updateDisplay()
-              this.activeItemDisplay.updateDisplay()
 
-              // Add bullets to world
-              for (const bullet of bullets) {
-                this.worldContainer.addChild(bullet.getGraphics())
+          if (weapon && ammo && ammo.magazine > 0) {
+            // Check cooldown
+            const timeSinceLastShot = currentTime - this.lastShootTime
+            if (timeSinceLastShot >= weapon.cooldownMs) {
+              // Cooldown finished, can shoot
+
+              // Update last shoot time
+              this.lastShootTime = currentTime
+
+              if (this.isMultiplayer) {
+                // In multiplayer, send shoot to server
+                // Server will broadcast authoritative bullets back
+                this.networkManager?.sendShoot(weapon.id, angle)
+
+                // Note: Don't create client-side prediction bullets
+                // Wait for server broadcast to avoid desync
+              } else {
+                // Single player - shoot locally
+                const bullets = this.player.tryShoot(worldMouse.x, worldMouse.y, currentTime)
+                if (bullets.length > 0) {
+                  this.playerInventory.consumeAmmo(this.playerInventory.currentSlot)
+                  this.hotbarUI.updateDisplay()
+                  this.activeItemDisplay.updateDisplay()
+
+                  for (const bullet of bullets) {
+                    this.worldContainer.addChild(bullet.getGraphics())
+                  }
+                }
               }
             }
+            // If still in cooldown, do nothing (don't shoot, but don't return either)
           }
         }
       }
@@ -278,12 +679,16 @@ export class GameManager {
     // Update pickup prompt
     this.updatePickupPrompt()
 
-    // Update dummies (shooting disabled)
-    this.dummyManager.update(currentTime)
+    // Update dummies (shooting disabled) - Single player only
+    if (this.dummyManager) {
+      this.dummyManager.update(currentTime)
+    }
 
     // Update all bullets
     this.player.updateBullets(deltaSeconds)
-    this.dummyManager.updateBullets(deltaSeconds)
+    if (this.dummyManager) {
+      this.dummyManager.updateBullets(deltaSeconds)
+    }
 
     // Check collisions
     this.checkCollisions()
@@ -294,8 +699,10 @@ export class GameManager {
     // Check pillar collisions with bullets
     this.checkPillarCollisions()
 
-    // Check destroyed boxes and spawn items
-    this.itemSpawnManager.checkDestroyedBoxes()
+    // Check destroyed boxes and spawn items - Single player only
+    if (this.itemSpawnManager) {
+      this.itemSpawnManager.checkDestroyedBoxes()
+    }
 
     // Check box collisions with player/entities (can't walk through)
     this.checkBoxEntityCollisions()
@@ -317,6 +724,19 @@ export class GameManager {
   }
 
   private handlePickup(): void {
+    // Multiplayer mode - use server items
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const closestItem = this.serverBoxManager.getClosestItemInRange(this.player.x, this.player.y, 100)
+      if (closestItem) {
+        // Send pickup request to server
+        this.networkManager?.sendPickupItem(closestItem.id)
+      }
+      return
+    }
+
+    // Single player mode - local items
+    if (!this.itemSpawnManager) return
+
     const closestItem = this.itemSpawnManager.getClosestItemInRange(this.player.x, this.player.y, 100)
     if (!closestItem) return
 
@@ -345,6 +765,28 @@ export class GameManager {
   }
 
   private updatePickupPrompt(): void {
+    // Multiplayer mode - use server items
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const closestItem = this.serverBoxManager.getClosestItemInRange(this.player.x, this.player.y, 100)
+      if (closestItem) {
+        let itemName = 'Item'
+        const item = closestItem.item
+        if (item.itemType === ItemType.WEAPON && item instanceof WeaponPickup) {
+          const weaponData = WEAPONS.find((w) => w.id === item.weaponType)
+          itemName = weaponData?.name || item.weaponType
+        } else if (item.itemType === ItemType.HEALING) {
+          itemName = 'Med Kit'
+        }
+        this.pickupPromptUI.show(itemName, item.x, item.y)
+      } else {
+        this.pickupPromptUI.hide()
+      }
+      return
+    }
+
+    // Single player mode - local items
+    if (!this.itemSpawnManager) return
+
     const closestItem = this.itemSpawnManager.getClosestItemInRange(this.player.x, this.player.y, 100)
 
     if (closestItem) {
@@ -363,11 +805,20 @@ export class GameManager {
   }
 
   private checkCollisions(): void {
-    // Get all entities (player + dummies)
-    const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
+    // In multiplayer, skip collision detection - server handles it
+    if (this.isMultiplayer) return
 
-    // Get all bullets (from player + dummies)
-    const allBullets = [...this.player.bullets, ...this.dummyManager.getAllBullets()]
+    // Get all entities (player + dummies if in single player)
+    const allEntities: BaseEntity[] = [this.player]
+    if (this.dummyManager) {
+      allEntities.push(...this.dummyManager.getAliveDummies())
+    }
+
+    // Get all bullets (from player + dummies if in single player)
+    const allBullets = [...this.player.bullets]
+    if (this.dummyManager) {
+      allBullets.push(...this.dummyManager.getAllBullets())
+    }
 
     // Check collisions
     const collisions = this.collisionManager.checkCollisions(allBullets, allEntities)
@@ -385,6 +836,35 @@ export class GameManager {
   }
 
   private checkBoxCollisions(): void {
+    // Multiplayer mode - use server boxes (client-side only for visuals, no damage)
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const boxes = this.serverBoxManager.getAllBoxes()
+      const allBullets = this.player.bullets
+
+      for (const bullet of allBullets) {
+        if (!bullet.isAlive) continue
+
+        for (const box of boxes) {
+          if (box.isDestroyed) continue
+
+          const dx = bullet.x - box.x
+          const dy = bullet.y - box.y
+          const distance = Math.sqrt(dx * dx + dy * dy)
+
+          if (distance < box.getRadius()) {
+            // Hit box - send to server for validation
+            this.networkManager?.sendBoxDamage(box.id, bullet.damage)
+            bullet.onHit()
+            break
+          }
+        }
+      }
+      return
+    }
+
+    // Single player mode
+    if (!this.itemSpawnManager || !this.dummyManager) return
+
     const boxes = this.itemSpawnManager.getAllBoxes()
     const allBullets = [...this.player.bullets, ...this.dummyManager.getAllBullets()]
 
@@ -410,6 +890,36 @@ export class GameManager {
   }
 
   private checkBoxEntityCollisions(): void {
+    // Multiplayer mode - only check local player collision with server boxes
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const boxes = this.serverBoxManager.getAllBoxes()
+
+      if (!this.player.isAlive()) return
+
+      for (const box of boxes) {
+        if (box.isDestroyed) continue
+
+        const dx = this.player.x - box.x
+        const dy = this.player.y - box.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const minDistance = this.player.getRadius() + box.getRadius()
+
+        if (distance < minDistance) {
+          // Push player away from box
+          const overlap = minDistance - distance
+          const pushAngle = Math.atan2(dy, dx)
+          this.player.setPosition(
+            this.player.x + Math.cos(pushAngle) * overlap,
+            this.player.y + Math.sin(pushAngle) * overlap
+          )
+        }
+      }
+      return
+    }
+
+    // Single player mode
+    if (!this.itemSpawnManager || !this.dummyManager) return
+
     const boxes = this.itemSpawnManager.getAllBoxes()
     const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
 
@@ -436,6 +946,32 @@ export class GameManager {
   }
 
   private checkPillarCollisions(): void {
+    // Multiplayer mode - use server pillars
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const pillars = this.serverBoxManager.getAllPillars()
+      const allBullets = this.player.bullets
+
+      for (const bullet of allBullets) {
+        if (!bullet.isAlive) continue
+
+        for (const pillar of pillars) {
+          const dx = bullet.x - pillar.x
+          const dy = bullet.y - pillar.y
+          const distance = Math.sqrt(dx * dx + dy * dy)
+
+          if (distance < pillar.radius) {
+            // Hit pillar - bullet stops
+            bullet.onHit()
+            break
+          }
+        }
+      }
+      return
+    }
+
+    // Single player mode
+    if (!this.itemSpawnManager || !this.dummyManager) return
+
     const pillars = this.itemSpawnManager.getAllPillars()
     const allBullets = [...this.player.bullets, ...this.dummyManager.getAllBullets()]
 
@@ -458,6 +994,34 @@ export class GameManager {
   }
 
   private checkPillarEntityCollisions(): void {
+    // Multiplayer mode - only check local player collision with server pillars
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const pillars = this.serverBoxManager.getAllPillars()
+
+      if (!this.player.isAlive()) return
+
+      for (const pillar of pillars) {
+        const dx = this.player.x - pillar.x
+        const dy = this.player.y - pillar.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const minDistance = this.player.getRadius() + pillar.radius
+
+        if (distance < minDistance) {
+          // Push player away from pillar
+          const overlap = minDistance - distance
+          const pushAngle = Math.atan2(dy, dx)
+          this.player.setPosition(
+            this.player.x + Math.cos(pushAngle) * overlap,
+            this.player.y + Math.sin(pushAngle) * overlap
+          )
+        }
+      }
+      return
+    }
+
+    // Single player mode
+    if (!this.itemSpawnManager || !this.dummyManager) return
+
     const pillars = this.itemSpawnManager.getAllPillars()
     const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
 
@@ -485,6 +1049,31 @@ export class GameManager {
     const weapon = this.playerInventory.getCurrentWeapon()
     if (!weapon || !weapon.isMelee) return
 
+    // Multiplayer mode - use server boxes
+    if (this.isMultiplayer && this.serverBoxManager) {
+      const boxes = this.serverBoxManager.getAllBoxes()
+
+      for (const box of boxes) {
+        if (box.isDestroyed) continue
+
+        const dx = box.x - this.player.x
+        const dy = box.y - this.player.y
+        const distanceToCenter = Math.sqrt(dx * dx + dy * dy)
+
+        // Use damage radius for easier hitting
+        const damageDistance = this.player.getRadius() + box.getDamageRadius()
+        if (distanceToCenter <= damageDistance) {
+          // Send box damage to server
+          this.networkManager?.sendBoxDamage(box.id, weapon.damage)
+          break // Only hit one box per attack
+        }
+      }
+      return
+    }
+
+    // Single player mode - use local items
+    if (!this.itemSpawnManager) return
+
     const boxes = this.itemSpawnManager.getAllBoxes()
 
     for (const box of boxes) {
@@ -494,11 +1083,9 @@ export class GameManager {
       const dy = box.y - this.player.y
       const distanceToCenter = Math.sqrt(dx * dx + dy * dy)
 
-      // Check distance to edge of box, not center
-      const distanceToEdge = distanceToCenter - box.getRadius()
-
-      // Check if box edge is in melee range
-      if (distanceToEdge <= weapon.range) {
+      // Use damage radius for easier hitting
+      const damageDistance = this.player.getRadius() + box.getDamageRadius()
+      if (distanceToCenter <= damageDistance) {
         box.takeDamage(weapon.damage)
         break // Only hit one box per attack
       }
@@ -540,8 +1127,20 @@ export class GameManager {
     this.app.ticker.remove(this.gameLoop)
     this.inputManager.destroy()
     this.player.destroy()
-    this.dummyManager.destroy()
-    this.itemSpawnManager.destroy()
+
+    // Destroy single-player only managers
+    if (this.dummyManager) {
+      this.dummyManager.destroy()
+    }
+    if (this.itemSpawnManager) {
+      this.itemSpawnManager.destroy()
+    }
+
+    // Disconnect from multiplayer if connected
+    if (this.networkManager) {
+      this.networkManager.disconnect()
+    }
+
     this.pickupPromptUI.destroy()
     this.healingChannelUI.destroy()
     this.reloadUI.destroy()

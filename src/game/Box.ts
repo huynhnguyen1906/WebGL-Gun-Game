@@ -13,26 +13,34 @@ export type BoxContent = { type: 'weapon'; weaponType: WeaponTypeValue } | { typ
 export class Box {
   private container: PIXI.Container
   private sprite: PIXI.Sprite | null = null
+  private debugGraphics: PIXI.Graphics | null = null
+  public id: number = -1 // Server-assigned ID for multiplayer
   public x: number
   public y: number
   private hp: number
-  private radius: number
+  private radius: number // Collision radius
+  private damageRadius: number // Damage detection radius
 
   public isDestroyed: boolean = false
   public content: BoxContent
 
-  constructor(x: number, y: number, content: BoxContent) {
+  constructor(x: number, y: number, content: BoxContent, id: number = -1) {
+    this.id = id
     this.x = x
     this.y = y
     this.content = content
     this.hp = BOX_CONFIG.MAX_HP
     this.radius = BOX_CONFIG.RADIUS
+    this.damageRadius = BOX_CONFIG.DAMAGE_RADIUS
 
     this.container = new PIXI.Container()
     this.container.x = x
     this.container.y = y
 
     this.loadSprite()
+    if (BOX_CONFIG.DEBUG_HITBOX) {
+      this.createDebugHitbox()
+    }
   }
 
   private async loadSprite(): Promise<void> {
@@ -55,6 +63,20 @@ export class Box {
       graphics.stroke({ color: 0x654321, width: 2 })
       this.container.addChild(graphics)
     }
+  }
+
+  private createDebugHitbox(): void {
+    this.debugGraphics = new PIXI.Graphics()
+
+    // Red circle for collision hitbox
+    this.debugGraphics.circle(0, 0, this.radius)
+    this.debugGraphics.stroke({ color: 0xff0000, width: 2, alpha: 0.5 })
+
+    // Green circle for damage hitbox
+    this.debugGraphics.circle(0, 0, this.damageRadius)
+    this.debugGraphics.stroke({ color: 0x00ff00, width: 2, alpha: 0.5 })
+
+    this.container.addChild(this.debugGraphics)
   }
 
   private updateScale(): void {
@@ -93,6 +115,10 @@ export class Box {
 
   getRadius(): number {
     return this.radius
+  }
+
+  getDamageRadius(): number {
+    return this.damageRadius
   }
 
   getContainer(): PIXI.Container {

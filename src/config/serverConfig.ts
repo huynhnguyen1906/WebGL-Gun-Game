@@ -129,13 +129,15 @@ export const ENTITY_CONFIG = {
 // ===== BOX CONFIG =====
 export const BOX_CONFIG = {
   MAX_HP: 30,
-  RADIUS: 35, // Collision radius
+  RADIUS: 35, // Collision radius (prevents walking through)
+  DAMAGE_RADIUS: 50, // Damage detection radius (easier to hit)
   SPAWN_RADIUS: 50, // Item drop radius when box destroyed
   SCALE_THRESHOLDS: [
     { minHp: 21, scale: 1.0 }, // 30-21 HP: Full size
     { minHp: 11, scale: 0.8 }, // 20-11 HP: 80% size
     { minHp: 1, scale: 0.6 }, // 10-1 HP: 60% size
   ],
+  DEBUG_HITBOX: false, // Show debug hitbox circles
 }
 
 // ===== PILLAR CONFIG =====
