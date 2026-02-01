@@ -138,15 +138,12 @@ export class SocketHandler {
         console.log(`Player ${shooter.id} hit Player ${result.targetId} for ${result.damage} damage (HP: ${result.hp})`)
 
         // Check if target died
-        if (result.hp <= 0) {
-          const target = this.gameState.getPlayer(result.targetId)
-          if (target && target.isDead) {
-            io.emit('player_died', {
-              playerId: result.targetId,
-              killerId: shooter.id,
-            })
-            console.log(`Player ${result.targetId} died. Killed by Player ${shooter.id}`)
-          }
+        if (result.killed) {
+          io.emit('player_died', {
+            playerId: result.targetId,
+            killerId: shooter.id,
+          })
+          console.log(`💀 Player ${result.targetId} died. Killed by Player ${shooter.id}`)
         }
       }
     })
