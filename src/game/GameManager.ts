@@ -286,12 +286,12 @@ export class GameManager {
       // Handle remote player death
       const remotePlayer = this.remotePlayers.get(data.playerId)
       if (remotePlayer) {
-        remotePlayer.setDead(true)
-        // Fade out animation then hide completely
+        // Fade out animation FIRST, then mark as dead and hide
         this.fadeOutEntity(remotePlayer.getContainer(), () => {
+          remotePlayer.setDead(true)
           remotePlayer.getContainer().visible = false
         })
-        console.log(`Player ${data.playerId} was killed by Player ${data.killerId}`)
+        console.log(`💀 Player ${data.playerId} was killed by Player ${data.killerId}`)
       }
     }
 
@@ -1359,10 +1359,10 @@ export class GameManager {
 
   // Fade out animation for entity death
   private fadeOutEntity(container: PIXI.Container, onComplete?: () => void): void {
-    // Start from current alpha or 1.0
-    if (container.alpha > 1.0) container.alpha = 1.0
+    // Ensure alpha starts at 1.0 for proper fade out
+    container.alpha = 1.0
 
-    const fadeSpeed = 0.08 // Faster fade out (was 0.05)
+    const fadeSpeed = 0.05 // Smooth fade out
     const animate = () => {
       container.alpha -= fadeSpeed
       if (container.alpha <= 0) {
