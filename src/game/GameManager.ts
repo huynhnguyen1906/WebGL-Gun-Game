@@ -42,6 +42,7 @@ export class GameManager {
   private uiContainer: PIXI.Container
   private lastTime: number = 0
   private isGameOver: boolean = false
+  private lastMeleeAttackTime: number = 0
 
   constructor(app: PIXI.Application) {
     this.app = app
@@ -234,9 +235,15 @@ export class GameManager {
       if (!isOverHotbar) {
         // Check if melee or ranged
         if (this.playerInventory.isCurrentSlotMelee()) {
-          // Melee attack
+          // Melee attack - hit entities
           const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
-          this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, allEntities)
+          const hitEntities = this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, allEntities)
+
+          // If attack happened (hit something or cooldown passed), also check boxes
+          if (currentTime - this.lastMeleeAttackTime >= 500) {
+            this.checkMeleeBoxAttack(worldMouse.x, worldMouse.y)
+            this.lastMeleeAttackTime = currentTime
+          }
         } else {
           // Ranged attack - check ammo
           const ammo = this.playerInventory.getCurrentAmmo()
@@ -275,6 +282,15 @@ export class GameManager {
 
     // Check collisions
     this.checkCollisions()
+
+    // Check box collisions with bullets
+    this.checkBoxCollisions()
+
+    // Check destroyed boxes and spawn items
+    this.itemSpawnManager.checkDestroyedBoxes()
+
+    // Check box collisions with player/entities (can't walk through)
+    this.checkBoxEntityCollisions()
 
     // Check if player is dead
     if (!this.player.isAlive()) {
@@ -351,6 +367,99 @@ export class GameManager {
         // Player killed a dummy - add score
         this.scoreUI.addScore(1)
       }
+    }
+  }
+
+  private checkBoxCollisions(): void {
+    const boxes = this.itemSpawnManager.getAllBoxes()
+    const allBullets = [...this.player.bullets, ...this.dummyManager.getAllBullets()]
+
+    for (const bullet of allBullets) {
+      if (!bullet.isAlive) continue
+
+      for (const box of boxes) {
+        if (box.isDestroyed) continue
+
+        // Check collision
+        const dx = bullet.x - box.x
+        const dy = bullet.y - box.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        if (distance < box.getRadius()) {
+          // Hit box
+          box.takeDamage(bullet.damage)
+          bullet.onHit()
+          break
+        }
+      }
+    }
+  }
+
+  private checkBoxEntityCollisions(): void {
+    const boxes = this.itemSpawnManager.getAllBoxes()
+    const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
+
+    for (const entity of allEntities) {
+      if (!entity.isAlive()) continue
+
+      for (const box of boxes) {
+        if (box.isDestroyed) continue
+
+        // Check collision
+        const dx = entity.x - box.x
+        const dy = entity.y - box.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const minDistance = entity.getRadius() + box.getRadius()
+
+        if (distance < minDistance) {
+          // Push entity away from box
+          const overlap = minDistance - distance
+          const pushAngle = Math.atan2(dy, dx)
+          entity.setPosition(entity.x + Math.cos(pushAngle) * overlap, entity.y + Math.sin(pushAngle) * overlap)
+        }
+      }
+    }
+  }
+
+  private checkMeleeBoxAttack(targetX: number, targetY: number): void {
+    const weapon = this.playerInventory.getCurrentWeapon()
+    console.log('checkMeleeBoxAttack called, weapon:', weapon)
+    if (!weapon || !weapon.isMelee) return
+
+    const boxes = this.itemSpawnManager.getAllBoxes()
+    console.log(`Player at (${this.player.x}, ${this.player.y})`)
+    console.log('Number of boxes:', boxes.length)
+
+    let closestDistance = Infinity
+    let closestBox = null
+
+    for (const box of boxes) {
+      if (box.isDestroyed) continue
+
+      const dx = box.x - this.player.x
+      const dy = box.y - this.player.y
+      const distanceToCenter = Math.sqrt(dx * dx + dy * dy)
+
+      // Check distance to edge of box, not center
+      const distanceToEdge = distanceToCenter - box.getRadius()
+
+      if (distanceToEdge < closestDistance) {
+        closestDistance = distanceToEdge
+        closestBox = box
+      }
+
+      // Check if box edge is in melee range
+      if (distanceToEdge <= weapon.range) {
+        console.log('Box in range! Applying damage')
+        box.takeDamage(weapon.damage)
+        break // Only hit one box per attack
+      }
+    }
+
+    if (closestBox) {
+      console.log(
+        `Closest box at (${closestBox.x}, ${closestBox.y}), distance to edge: ${closestDistance.toFixed(2)}, need: ${weapon.range}`
+      )
     }
   }
 

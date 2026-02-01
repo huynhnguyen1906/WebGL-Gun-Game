@@ -1,8 +1,8 @@
 /**
  * Item Spawn Manager
  *
- * Quản lý việc spawn weapons và healing items trên map.
- * Random positions, avoid player spawn area.
+ * Quản lý việc spawn boxes và items trên map.
+ * Items spawn trong boxes, khi box bị phá vỡ sẽ drop item.
  *
  * Online-ready:
  * - Server kiểm soát item spawns
@@ -11,11 +11,13 @@
 import * as PIXI from 'pixi.js'
 
 import { WeaponType, type WeaponTypeValue } from '../config/serverConfig'
+import { Box, type BoxContent } from './Box'
 import { HealingPickup, ItemPickup, WeaponPickup } from './ItemPickup'
 import type { GameMap } from './Map'
 
 export class ItemSpawnManager {
   private items: ItemPickup[] = []
+  private boxes: Box[] = []
   private map: GameMap
   private worldContainer: PIXI.Container
 
@@ -24,49 +26,43 @@ export class ItemSpawnManager {
     this.worldContainer = worldContainer
   }
 
-  // Spawn initial items on map
+  // Spawn initial boxes on map
   spawnInitialItems(playerX: number, playerY: number, avoidRadius: number = 500): void {
-    // Spawn 3 rifles
+    // Spawn 3 boxes with rifles
     for (let i = 0; i < 3; i++) {
       const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnWeapon(pos.x, pos.y, WeaponType.RIFLE, 30, 90)
+      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.RIFLE })
     }
 
-    // Spawn 2 snipers
+    // Spawn 2 boxes with snipers
     for (let i = 0; i < 2; i++) {
       const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnWeapon(pos.x, pos.y, WeaponType.SNIPER, 5, 15)
+      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.SNIPER })
     }
 
-    // Spawn 2 shotguns
+    // Spawn 2 boxes with shotguns
     for (let i = 0; i < 2; i++) {
       const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnWeapon(pos.x, pos.y, WeaponType.SHOTGUN, 6, 18)
+      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.SHOTGUN })
     }
 
-    // Spawn 3 pistols
+    // Spawn 3 boxes with pistols
     for (let i = 0; i < 3; i++) {
       const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnWeapon(pos.x, pos.y, WeaponType.PISTOL, 12, 999)
+      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.PISTOL })
     }
 
-    // Spawn 5 healing items
+    // Spawn 5 boxes with healing
     for (let i = 0; i < 5; i++) {
       const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnHealing(pos.x, pos.y)
+      this.spawnBox(pos.x, pos.y, { type: 'healing' })
     }
   }
 
-  private spawnWeapon(x: number, y: number, weaponType: WeaponTypeValue, magazine: number, reserve: number): void {
-    const weapon = new WeaponPickup(x, y, weaponType, magazine, reserve)
-    this.items.push(weapon)
-    this.worldContainer.addChild(weapon.getContainer())
-  }
-
-  private spawnHealing(x: number, y: number): void {
-    const healing = new HealingPickup(x, y)
-    this.items.push(healing)
-    this.worldContainer.addChild(healing.getContainer())
+  private spawnBox(x: number, y: number, content: BoxContent): void {
+    const box = new Box(x, y, content)
+    this.boxes.push(box)
+    this.worldContainer.addChild(box.getContainer())
   }
 
   private getValidSpawnPosition(playerX: number, playerY: number, avoidRadius: number): { x: number; y: number } {
@@ -121,10 +117,69 @@ export class ItemSpawnManager {
     return this.items
   }
 
+  // Get all boxes
+  getAllBoxes(): Box[] {
+    return this.boxes
+  }
+
+  // Handle box destruction and spawn item
+  checkDestroyedBoxes(): void {
+    const destroyedBoxes = this.boxes.filter((box) => box.isDestroyed)
+
+    for (const box of destroyedBoxes) {
+      // Spawn item from box
+      const spawnPos = box.getItemSpawnPosition()
+
+      if (box.content.type === 'weapon') {
+        // Get default ammo for weapon type
+        let magazine = 0
+        let reserve = 0
+
+        switch (box.content.weaponType) {
+          case WeaponType.PISTOL:
+            magazine = 12
+            reserve = 999
+            break
+          case WeaponType.RIFLE:
+            magazine = 30
+            reserve = 60
+            break
+          case WeaponType.SNIPER:
+            magazine = 5
+            reserve = 15
+            break
+          case WeaponType.SHOTGUN:
+            magazine = 6
+            reserve = 18
+            break
+        }
+
+        const weapon = new WeaponPickup(spawnPos.x, spawnPos.y, box.content.weaponType, magazine, reserve)
+        this.items.push(weapon)
+        this.worldContainer.addChild(weapon.getContainer())
+      } else if (box.content.type === 'healing') {
+        const healing = new HealingPickup(spawnPos.x, spawnPos.y)
+        this.items.push(healing)
+        this.worldContainer.addChild(healing.getContainer())
+      }
+
+      // Remove box
+      box.destroy()
+    }
+
+    // Remove destroyed boxes from list
+    this.boxes = this.boxes.filter((box) => !box.isDestroyed)
+  }
+
   destroy(): void {
     for (const item of this.items) {
       item.destroy()
     }
     this.items = []
+
+    for (const box of this.boxes) {
+      box.destroy()
+    }
+    this.boxes = []
   }
 }
