@@ -116,7 +116,7 @@ export class NetworkManager {
     this.socket = null
     this.connected = false
     this.playerId = null
-    this.serverUrl = 'http://localhost:3001'
+    this.serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
     this.onInit = null
     this.onPlayerJoined = null
