@@ -9,6 +9,7 @@
  * - 20 tick/s server updates for state sync
  */
 import cors from 'cors'
+import 'dotenv/config'
 import express from 'express'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
