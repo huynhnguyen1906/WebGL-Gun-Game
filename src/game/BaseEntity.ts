@@ -25,6 +25,10 @@ export abstract class BaseEntity {
   protected hpBar!: PIXI.Graphics
   protected hpBarBg!: PIXI.Graphics
 
+  // Melee animation state
+  protected isPunchingLeft: boolean = false
+  protected isPunchingRight: boolean = false
+
   public x: number
   public y: number
   protected rotation: number = 0
@@ -125,15 +129,19 @@ export abstract class BaseEntity {
     const { ARM } = this.visualConfig
     const { OFFSET_DISTANCE, SPREAD_RAD } = ARM
 
-    // Left arm
-    const leftAngle = this.rotation - SPREAD_RAD / 2
-    this.leftArm.x = Math.cos(leftAngle) * OFFSET_DISTANCE
-    this.leftArm.y = Math.sin(leftAngle) * OFFSET_DISTANCE
+    // Left arm (only update if not punching)
+    if (!this.isPunchingLeft) {
+      const leftAngle = this.rotation - SPREAD_RAD / 2
+      this.leftArm.x = Math.cos(leftAngle) * OFFSET_DISTANCE
+      this.leftArm.y = Math.sin(leftAngle) * OFFSET_DISTANCE
+    }
 
-    // Right arm
-    const rightAngle = this.rotation + SPREAD_RAD / 2
-    this.rightArm.x = Math.cos(rightAngle) * OFFSET_DISTANCE
-    this.rightArm.y = Math.sin(rightAngle) * OFFSET_DISTANCE
+    // Right arm (only update if not punching)
+    if (!this.isPunchingRight) {
+      const rightAngle = this.rotation + SPREAD_RAD / 2
+      this.rightArm.x = Math.cos(rightAngle) * OFFSET_DISTANCE
+      this.rightArm.y = Math.sin(rightAngle) * OFFSET_DISTANCE
+    }
   }
 
   // Set rotation (face direction)
@@ -174,10 +182,13 @@ export abstract class BaseEntity {
     return this.visualConfig.RADIUS
   }
 
-  // Shooting
+  // Shooting / Melee
   tryShoot(targetX: number, targetY: number, currentTime: number): Bullet[] {
     const weaponData = getWeaponById(this.currentWeaponId)
     if (!weaponData) return []
+
+    // If melee weapon, don't create bullets
+    if (weaponData.isMelee) return []
 
     const { cooldownMs, speed, range, damage, pelletCount, spreadAngle } = weaponData
 
@@ -216,6 +227,114 @@ export abstract class BaseEntity {
 
     this.lastShootTime = currentTime
     return bullets
+  }
+
+  // Melee attack - check entities in range and apply damage
+  // Returns list of entities hit
+  tryMeleeAttack(targetX: number, targetY: number, currentTime: number, entities: BaseEntity[]): BaseEntity[] {
+    const weaponData = getWeaponById(this.currentWeaponId)
+    if (!weaponData || !weaponData.isMelee) return []
+
+    const { cooldownMs, range, damage } = weaponData
+
+    // Check if already punching
+    if (this.isPunchingLeft || this.isPunchingRight) {
+      return []
+    }
+
+    // Check cooldown
+    if (currentTime - this.lastShootTime < cooldownMs) {
+      return []
+    }
+
+    // Get attack direction for animation
+    const angle = Math.atan2(targetY - this.y, targetX - this.x)
+
+    // Play punch animation (alternate between left and right)
+    const isLeftPunch = Math.floor(this.lastShootTime / cooldownMs) % 2 === 0
+    this.playPunchAnimation(angle, isLeftPunch, range)
+
+    // Find entities in melee range
+    const hitEntities: BaseEntity[] = []
+
+    for (const entity of entities) {
+      if (entity === this || !entity.isAlive()) continue
+
+      const dx = entity.x - this.x
+      const dy = entity.y - this.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+
+      // Check if in range
+      if (distance <= range) {
+        entity.takeDamage(damage)
+        hitEntities.push(entity)
+      }
+    }
+
+    this.lastShootTime = currentTime
+    return hitEntities
+  }
+
+  // Punch animation - swing arm out to range and back
+  protected playPunchAnimation(angle: number, isLeftPunch: boolean, range: number): void {
+    const arm = isLeftPunch ? this.leftArm : this.rightArm
+
+    // Mark this hand as punching
+    if (isLeftPunch) {
+      this.isPunchingLeft = true
+    } else {
+      this.isPunchingRight = true
+    }
+
+    const { ARM } = this.visualConfig
+    const { OFFSET_DISTANCE, SPREAD_RAD } = ARM
+
+    // Calculate base position
+    const armAngle = isLeftPunch ? angle - SPREAD_RAD / 2 : angle + SPREAD_RAD / 2
+    const baseX = Math.cos(armAngle) * OFFSET_DISTANCE
+    const baseY = Math.sin(armAngle) * OFFSET_DISTANCE
+
+    // Calculate extended position (fly out to attack range)
+    const extendedX = Math.cos(angle) * range
+    const extendedY = Math.sin(angle) * range
+
+    // Animation duration
+    const flyOutDuration = 150 // ms to fly out
+    const flyBackDuration = 150 // ms to fly back
+    const startTime = performance.now()
+
+    const animate = () => {
+      const elapsed = performance.now() - startTime
+
+      if (elapsed < flyOutDuration) {
+        // Flying out
+        const progress = elapsed / flyOutDuration
+        const easeProgress = progress * progress // Ease in
+        arm.x = baseX + (extendedX - baseX) * easeProgress
+        arm.y = baseY + (extendedY - baseY) * easeProgress
+        requestAnimationFrame(animate)
+      } else if (elapsed < flyOutDuration + flyBackDuration) {
+        // Flying back
+        const progress = (elapsed - flyOutDuration) / flyBackDuration
+        const easeProgress = 1 - (1 - progress) * (1 - progress) // Ease out
+        arm.x = extendedX + (baseX - extendedX) * easeProgress
+        arm.y = extendedY + (baseY - extendedY) * easeProgress
+        requestAnimationFrame(animate)
+      } else {
+        // Animation complete - reset to base position
+        arm.x = baseX
+        arm.y = baseY
+
+        // Mark punching as complete
+        if (isLeftPunch) {
+          this.isPunchingLeft = false
+        } else {
+          this.isPunchingRight = false
+        }
+      }
+    }
+
+    animate()
   }
 
   // Update bullets

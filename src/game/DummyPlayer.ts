@@ -31,6 +31,12 @@ export class DummyPlayer extends BaseEntity {
 
   // Update dummy (auto-shoot with random direction)
   update(currentTime: number, worldContainer: PIXI.Container): Bullet[] {
+    // TEMP: Disable shooting for testing pickup system
+    // TODO: Re-enable when pickup system is complete
+
+    // Suppress unused variable warning
+    void worldContainer
+
     // Check if dead and waiting for respawn
     if (this.isDead) {
       if (currentTime - this.deathTime >= ENTITY_CONFIG.DUMMY.RESPAWN_TIME_MS) {
@@ -42,6 +48,10 @@ export class DummyPlayer extends BaseEntity {
       return []
     }
 
+    // Shooting disabled
+    return []
+
+    /* COMMENTED OUT FOR TESTING
     // Check if time to shoot
     if (currentTime - this.lastAutoShootTime >= this.shootInterval) {
       this.lastAutoShootTime = currentTime
@@ -71,6 +81,7 @@ export class DummyPlayer extends BaseEntity {
     }
 
     return []
+    */
   }
 
   // Override takeDamage to handle death

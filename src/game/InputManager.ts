@@ -2,6 +2,8 @@ export class InputManager {
   private keys: Set<string> = new Set()
   private pressedNumbers: Set<number> = new Set() // Track number key presses
   private consumedNumbers: Set<number> = new Set() // Track consumed number presses
+  private pressedF: boolean = false // Track F key press
+  private pressedR: boolean = false // Track R key press
   public mouseX: number = 0
   public mouseY: number = 0
   public isMouseDown: boolean = false
@@ -36,6 +38,12 @@ export class InputManager {
     if (e.code === 'Digit2') this.pressedNumbers.add(2)
     if (e.code === 'Digit3') this.pressedNumbers.add(3)
     if (e.code === 'Digit4') this.pressedNumbers.add(4)
+
+    // Track F key for pickup
+    if (e.code === 'KeyF') this.pressedF = true
+
+    // Track R key for reload
+    if (e.code === 'KeyR') this.pressedR = true
   }
 
   private onKeyUp = (e: KeyboardEvent): void => {
@@ -58,6 +66,10 @@ export class InputManager {
       this.pressedNumbers.delete(4)
       this.consumedNumbers.delete(4)
     }
+
+    // Clear F and R keys
+    if (e.code === 'KeyF') this.pressedF = false
+    if (e.code === 'KeyR') this.pressedR = false
   }
 
   private onMouseMove = (e: MouseEvent): void => {
@@ -120,6 +132,24 @@ export class InputManager {
       }
     }
     return null
+  }
+
+  // Check if F key was pressed (for pickup)
+  wasFPressed(): boolean {
+    if (this.pressedF) {
+      this.pressedF = false
+      return true
+    }
+    return false
+  }
+
+  // Check if R key was pressed (for reload)
+  wasRPressed(): boolean {
+    if (this.pressedR) {
+      this.pressedR = false
+      return true
+    }
+    return false
   }
 
   destroy(): void {

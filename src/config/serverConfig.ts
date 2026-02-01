@@ -13,6 +13,7 @@
 
 // ===== WEAPON TYPES =====
 export const WeaponType = {
+  FIST: 'FIST',
   PISTOL: 'PISTOL',
   RIFLE: 'RIFLE',
   SNIPER: 'SNIPER',
@@ -31,16 +32,36 @@ export interface WeaponData {
   cooldownMs: number
   pelletCount?: number // Shotgun only
   spreadAngle?: number // Shotgun only (degrees)
+
+  // Ammo system
+  magazineSize?: number // Số đạn trong băng (undefined = melee/infinite)
+  maxReserveAmmo?: number // Đạn dự trữ tối đa
+  reloadTimeMs?: number // Thời gian reload
+  infiniteAmmo?: boolean // Pistol = true
+  isMelee?: boolean // Fist = true
 }
 
 export const WEAPONS: WeaponData[] = [
+  {
+    id: WeaponType.FIST,
+    name: 'Fist',
+    damage: 10,
+    speed: 0,
+    range: 35, // Melee range
+    cooldownMs: 500,
+    isMelee: true,
+  },
   {
     id: WeaponType.PISTOL,
     name: 'Pistol',
     damage: 20,
     speed: 1000,
     range: 500,
-    cooldownMs: 1000,
+    cooldownMs: 300,
+    magazineSize: 12,
+    maxReserveAmmo: 999,
+    reloadTimeMs: 1500,
+    infiniteAmmo: true,
   },
   {
     id: WeaponType.RIFLE,
@@ -49,6 +70,9 @@ export const WEAPONS: WeaponData[] = [
     speed: 1000,
     range: 1000,
     cooldownMs: 150,
+    magazineSize: 30,
+    maxReserveAmmo: 60,
+    reloadTimeMs: 2000,
   },
   {
     id: WeaponType.SNIPER,
@@ -57,6 +81,9 @@ export const WEAPONS: WeaponData[] = [
     speed: 1500,
     range: 1300,
     cooldownMs: 1200,
+    magazineSize: 5,
+    maxReserveAmmo: 20,
+    reloadTimeMs: 3000,
   },
   {
     id: WeaponType.SHOTGUN,
@@ -67,6 +94,9 @@ export const WEAPONS: WeaponData[] = [
     cooldownMs: 1200,
     pelletCount: 12,
     spreadAngle: 8,
+    magazineSize: 6,
+    maxReserveAmmo: 24,
+    reloadTimeMs: 2500,
   },
 ]
 
