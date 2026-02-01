@@ -16,7 +16,6 @@ export class Box {
   public x: number
   public y: number
   private hp: number = 30
-  private maxHp: number = 30
   private radius: number = 35 // Collision radius
 
   public isDestroyed: boolean = false

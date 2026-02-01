@@ -10,7 +10,7 @@
  */
 import * as PIXI from 'pixi.js'
 
-import { WeaponType, type WeaponTypeValue } from '../config/serverConfig'
+import { WeaponType } from '../config/serverConfig'
 import { Box, type BoxContent } from './Box'
 import { HealingPickup, ItemPickup, WeaponPickup } from './ItemPickup'
 import type { GameMap } from './Map'

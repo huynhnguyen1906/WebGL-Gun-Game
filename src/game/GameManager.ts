@@ -237,11 +237,11 @@ export class GameManager {
         if (this.playerInventory.isCurrentSlotMelee()) {
           // Melee attack - hit entities
           const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
-          const hitEntities = this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, allEntities)
+          this.player.tryMeleeAttack(worldMouse.x, worldMouse.y, currentTime, allEntities)
 
           // If attack happened (hit something or cooldown passed), also check boxes
           if (currentTime - this.lastMeleeAttackTime >= 500) {
-            this.checkMeleeBoxAttack(worldMouse.x, worldMouse.y)
+            this.checkMeleeBoxAttack()
             this.lastMeleeAttackTime = currentTime
           }
         } else {
@@ -421,7 +421,7 @@ export class GameManager {
     }
   }
 
-  private checkMeleeBoxAttack(targetX: number, targetY: number): void {
+  private checkMeleeBoxAttack(): void {
     const weapon = this.playerInventory.getCurrentWeapon()
     console.log('checkMeleeBoxAttack called, weapon:', weapon)
     if (!weapon || !weapon.isMelee) return

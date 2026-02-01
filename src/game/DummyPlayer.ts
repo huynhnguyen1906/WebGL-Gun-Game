@@ -6,8 +6,6 @@ import { BaseEntity } from './BaseEntity'
 import { Bullet } from './Bullet'
 
 export class DummyPlayer extends BaseEntity {
-  private shootInterval: number
-  private lastAutoShootTime: number = 0
   private isDead: boolean = false
   private deathTime: number = 0
   private respawnCallback?: (dummy: DummyPlayer) => void
@@ -21,8 +19,6 @@ export class DummyPlayer extends BaseEntity {
     // Random starting rotation
     this.rotation = Math.random() * Math.PI * 2
     this.updateArmPositions()
-
-    this.shootInterval = ENTITY_CONFIG.DUMMY.SHOOT_INTERVAL_MS
   }
 
   setRespawnCallback(callback: (dummy: DummyPlayer) => void): void {
