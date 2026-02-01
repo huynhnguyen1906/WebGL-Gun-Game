@@ -11,7 +11,7 @@
  * - Server kiểm soát inventory state
  * - Client chỉ render và gửi action requests
  */
-import { WEAPONS, type WeaponData, WeaponType, type WeaponTypeValue } from '../config/serverConfig'
+import { HEALING_CONFIG, WEAPONS, type WeaponData, WeaponType, type WeaponTypeValue } from '../config/serverConfig'
 
 export const SlotType = {
   PRIMARY: 1,
@@ -124,13 +124,13 @@ export class PlayerInventory {
     return true
   }
 
-  // Add healing item (max 3 stack)
+  // Add healing item (max from config)
   addHealing(): boolean {
     const slot = this.slots.get(SlotType.HEALING)
     if (!slot) return false
 
     const currentCount = slot.healingCount || 0
-    if (currentCount >= 3) return false // Max 3 stack
+    if (currentCount >= HEALING_CONFIG.MAX_STACK) return false
 
     slot.healingCount = currentCount + 1
     return true

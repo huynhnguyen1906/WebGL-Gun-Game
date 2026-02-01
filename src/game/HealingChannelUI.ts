@@ -2,9 +2,11 @@
  * Healing Channel UI
  *
  * Hiển thị progress bar khi player đang sử dụng healing item.
- * Channel time: 5 seconds
+ * Channel time từ serverConfig
  */
 import * as PIXI from 'pixi.js'
+
+import { HEALING_CONFIG } from '../config/serverConfig'
 
 export class HealingChannelUI {
   private container: PIXI.Container
@@ -13,7 +15,7 @@ export class HealingChannelUI {
   private text: PIXI.Text
   private isChanneling: boolean = false
   private channelStartTime: number = 0
-  private channelDuration: number = 5000 // 5 seconds
+  private channelDuration: number = HEALING_CONFIG.CHANNEL_TIME_MS
 
   constructor() {
     this.container = new PIXI.Container()

@@ -1,73 +1,110 @@
 /**
  * Item Spawn Manager
  *
- * Quản lý việc spawn boxes và items trên map.
+ * Quản lý việc spawn boxes, pillars và items trên map.
  * Items spawn trong boxes, khi box bị phá vỡ sẽ drop item.
+ * Pillars là obstacles tĩnh để chắn đạn.
  *
  * Online-ready:
- * - Server kiểm soát item spawns
+ * - Server kiểm soát tất cả spawns
  * - Client chỉ nhận positions và render
  */
 import * as PIXI from 'pixi.js'
 
-import { WeaponType } from '../config/serverConfig'
+import { PILLAR_CONFIG, SPAWN_CONFIG, WeaponType } from '../config/serverConfig'
 import { Box, type BoxContent } from './Box'
 import { HealingPickup, ItemPickup, WeaponPickup } from './ItemPickup'
 import type { GameMap } from './Map'
+import { Pillar } from './Pillar'
 
 export class ItemSpawnManager {
   private items: ItemPickup[] = []
   private boxes: Box[] = []
+  private pillars: Pillar[] = []
   private map: GameMap
   private worldContainer: PIXI.Container
+  // Separate tracking for independent spacing systems
+  private pillarPositions: Array<{ x: number; y: number; radius: number }> = []
+  private boxPositions: Array<{ x: number; y: number; radius: number }> = []
 
   constructor(map: GameMap, worldContainer: PIXI.Container) {
     this.map = map
     this.worldContainer = worldContainer
   }
 
-  // Spawn initial boxes on map
-  spawnInitialItems(playerX: number, playerY: number, avoidRadius: number = 500): void {
-    // Spawn 3 boxes with rifles
-    for (let i = 0; i < 3; i++) {
-      const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.RIFLE })
+  // Spawn initial pillars and boxes on map
+  spawnInitialItems(playerX: number, playerY: number, avoidRadius: number = SPAWN_CONFIG.AVOID_PLAYER_RADIUS): void {
+    // First spawn pillars with their own spacing system
+    for (let i = 0; i < PILLAR_CONFIG.COUNT; i++) {
+      const pos = this.getValidPillarPosition(playerX, playerY, avoidRadius)
+      if (pos) {
+        this.spawnPillar(pos.x, pos.y)
+      }
     }
 
-    // Spawn 2 boxes with snipers
-    for (let i = 0; i < 2; i++) {
-      const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.SNIPER })
+    // Then spawn boxes with their own spacing system
+    for (let i = 0; i < SPAWN_CONFIG.BOXES.RIFLE; i++) {
+      const pos = this.getValidBoxPosition(playerX, playerY, avoidRadius)
+      if (pos) {
+        this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.RIFLE })
+      }
     }
 
-    // Spawn 2 boxes with shotguns
-    for (let i = 0; i < 2; i++) {
-      const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.SHOTGUN })
+    for (let i = 0; i < SPAWN_CONFIG.BOXES.SNIPER; i++) {
+      const pos = this.getValidBoxPosition(playerX, playerY, avoidRadius)
+      if (pos) {
+        this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.SNIPER })
+      }
     }
 
-    // Spawn 3 boxes with pistols
-    for (let i = 0; i < 3; i++) {
-      const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.PISTOL })
+    for (let i = 0; i < SPAWN_CONFIG.BOXES.SHOTGUN; i++) {
+      const pos = this.getValidBoxPosition(playerX, playerY, avoidRadius)
+      if (pos) {
+        this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.SHOTGUN })
+      }
     }
 
-    // Spawn 5 boxes with healing
-    for (let i = 0; i < 5; i++) {
-      const pos = this.getValidSpawnPosition(playerX, playerY, avoidRadius)
-      this.spawnBox(pos.x, pos.y, { type: 'healing' })
+    for (let i = 0; i < SPAWN_CONFIG.BOXES.PISTOL; i++) {
+      const pos = this.getValidBoxPosition(playerX, playerY, avoidRadius)
+      if (pos) {
+        this.spawnBox(pos.x, pos.y, { type: 'weapon', weaponType: WeaponType.PISTOL })
+      }
+    }
+
+    // Spawn healing boxes
+    for (let i = 0; i < SPAWN_CONFIG.BOXES.HEALING; i++) {
+      const pos = this.getValidBoxPosition(playerX, playerY, avoidRadius)
+      if (pos) {
+        this.spawnBox(pos.x, pos.y, { type: 'healing' })
+      }
     }
   }
 
   private spawnBox(x: number, y: number, content: BoxContent): void {
     const box = new Box(x, y, content)
     this.boxes.push(box)
+    this.boxPositions.push({ x, y, radius: 35 })
     this.worldContainer.addChild(box.getContainer())
   }
 
-  private getValidSpawnPosition(playerX: number, playerY: number, avoidRadius: number): { x: number; y: number } {
+  private spawnPillar(x: number, y: number): void {
+    const pillar = new Pillar(x, y)
+    this.pillars.push(pillar)
+    this.pillarPositions.push({ x, y, radius: PILLAR_CONFIG.RADIUS })
+    this.worldContainer.addChild(pillar.getContainer())
+  }
+
+  // Get valid position for pillar spawn
+  // Pillars maintain spacing from other pillars, only check overlap with boxes
+  private getValidPillarPosition(
+    playerX: number,
+    playerY: number,
+    avoidRadius: number
+  ): { x: number; y: number } | null {
     let attempts = 0
     const maxAttempts = 100
+    const minDistance = SPAWN_CONFIG.MIN_DISTANCE_BETWEEN_OBSTACLES
+    const pillarRadius = PILLAR_CONFIG.RADIUS
 
     while (attempts < maxAttempts) {
       const pos = this.map.getRandomValidPosition()
@@ -75,16 +112,119 @@ export class ItemSpawnManager {
       // Check distance from player
       const dx = pos.x - playerX
       const dy = pos.y - playerY
-      const distance = Math.sqrt(dx * dx + dy * dy)
+      const distanceToPlayer = Math.sqrt(dx * dx + dy * dy)
 
-      if (distance > avoidRadius) {
+      if (distanceToPlayer <= avoidRadius) {
+        attempts++
+        continue
+      }
+
+      // Check spacing from other pillars (maintain minDistance)
+      let tooCloseToOtherPillar = false
+      for (const pillar of this.pillarPositions) {
+        const pdx = pos.x - pillar.x
+        const pdy = pos.y - pillar.y
+        const distance = Math.sqrt(pdx * pdx + pdy * pdy)
+        const requiredDistance = minDistance + pillar.radius + pillarRadius
+
+        if (distance < requiredDistance) {
+          tooCloseToOtherPillar = true
+          break
+        }
+      }
+
+      if (tooCloseToOtherPillar) {
+        attempts++
+        continue
+      }
+
+      // Only check overlap (not full minDistance) with boxes
+      let overlapsBox = false
+      for (const box of this.boxPositions) {
+        const bdx = pos.x - box.x
+        const bdy = pos.y - box.y
+        const distance = Math.sqrt(bdx * bdx + bdy * bdy)
+        const overlapDistance = box.radius + pillarRadius + 10 // Small buffer
+
+        if (distance < overlapDistance) {
+          overlapsBox = true
+          break
+        }
+      }
+
+      if (!overlapsBox) {
         return pos
       }
 
       attempts++
     }
 
-    // Fallback: return random position anyway
+    console.warn('Could not find valid pillar spawn position')
+    return this.map.getRandomValidPosition()
+  }
+
+  // Get valid position for box spawn
+  // Boxes maintain spacing from other boxes, only check overlap with pillars
+  private getValidBoxPosition(playerX: number, playerY: number, avoidRadius: number): { x: number; y: number } | null {
+    let attempts = 0
+    const maxAttempts = 100
+    const minDistance = SPAWN_CONFIG.MIN_DISTANCE_BETWEEN_OBSTACLES
+    const boxRadius = 35 // Box radius from BOX_CONFIG
+
+    while (attempts < maxAttempts) {
+      const pos = this.map.getRandomValidPosition()
+
+      // Check distance from player
+      const dx = pos.x - playerX
+      const dy = pos.y - playerY
+      const distanceToPlayer = Math.sqrt(dx * dx + dy * dy)
+
+      if (distanceToPlayer <= avoidRadius) {
+        attempts++
+        continue
+      }
+
+      // Check spacing from other boxes (maintain minDistance)
+      let tooCloseToOtherBox = false
+      for (const box of this.boxPositions) {
+        const bdx = pos.x - box.x
+        const bdy = pos.y - box.y
+        const distance = Math.sqrt(bdx * bdx + bdy * bdy)
+        const requiredDistance = minDistance + box.radius + boxRadius
+
+        if (distance < requiredDistance) {
+          tooCloseToOtherBox = true
+          break
+        }
+      }
+
+      if (tooCloseToOtherBox) {
+        attempts++
+        continue
+      }
+
+      // Only check overlap (not full minDistance) with pillars
+      let overlapsPillar = false
+      for (const pillar of this.pillarPositions) {
+        const pdx = pos.x - pillar.x
+        const pdy = pos.y - pillar.y
+        const distance = Math.sqrt(pdx * pdx + pdy * pdy)
+        const overlapDistance = pillar.radius + boxRadius + 10 // Small buffer
+
+        if (distance < overlapDistance) {
+          overlapsPillar = true
+          break
+        }
+      }
+
+      if (!overlapsPillar) {
+        return pos
+      }
+
+      attempts++
+    }
+
+    console.warn('Could not find valid box spawn position')
     return this.map.getRandomValidPosition()
   }
 
@@ -120,6 +260,11 @@ export class ItemSpawnManager {
   // Get all boxes
   getAllBoxes(): Box[] {
     return this.boxes
+  }
+
+  // Get all pillars
+  getAllPillars(): Pillar[] {
+    return this.pillars
   }
 
   // Handle box destruction and spawn item
@@ -181,5 +326,13 @@ export class ItemSpawnManager {
       box.destroy()
     }
     this.boxes = []
+
+    for (const pillar of this.pillars) {
+      pillar.destroy()
+    }
+    this.pillars = []
+
+    this.pillarPositions = []
+    this.boxPositions = []
   }
 }

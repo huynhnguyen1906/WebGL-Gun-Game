@@ -126,6 +126,47 @@ export const ENTITY_CONFIG = {
   },
 }
 
+// ===== BOX CONFIG =====
+export const BOX_CONFIG = {
+  MAX_HP: 30,
+  RADIUS: 35, // Collision radius
+  SPAWN_RADIUS: 50, // Item drop radius when box destroyed
+  SCALE_THRESHOLDS: [
+    { minHp: 21, scale: 1.0 }, // 30-21 HP: Full size
+    { minHp: 11, scale: 0.8 }, // 20-11 HP: 80% size
+    { minHp: 1, scale: 0.6 }, // 10-1 HP: 60% size
+  ],
+}
+
+// ===== PILLAR CONFIG =====
+export const PILLAR_CONFIG = {
+  RADIUS: 50, // Larger than box
+  COUNT: 25, // Number of pillars on map
+  COLOR: 0x8b7355, // Brown color
+}
+
+// ===== HEALING CONFIG =====
+export const HEALING_CONFIG = {
+  CHANNEL_TIME_MS: 5000, // 5 seconds to heal
+  HEAL_AMOUNT: 50, // HP restored
+  MAX_STACK: 3, // Max healing items in inventory
+  INTERRUPT_ON_MOVE: true,
+  INTERRUPT_ON_DAMAGE: true,
+}
+
+// ===== SPAWN CONFIG =====
+export const SPAWN_CONFIG = {
+  BOXES: {
+    RIFLE: 5, // Increased from 3
+    SNIPER: 3, // Increased from 2
+    SHOTGUN: 3, // Increased from 2
+    PISTOL: 4, // Increased from 3
+    HEALING: 7, // Increased from 5
+  },
+  MIN_DISTANCE_BETWEEN_OBSTACLES: 150, // Min distance between boxes/pillars
+  AVOID_PLAYER_RADIUS: 500, // Avoid spawning near player
+}
+
 // ===== GAME RULES (Reserved for future) =====
 export const GAME_RULES = {
   // Placeholder for future game rules

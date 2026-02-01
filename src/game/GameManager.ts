@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js'
 
 import { GAME_CONFIG } from '../config/gameConfig'
-import { WEAPONS } from '../config/serverConfig'
+import { HEALING_CONFIG, WEAPONS } from '../config/serverConfig'
 import { ActiveItemDisplay } from './ActiveItemDisplay'
 import { BaseEntity } from './BaseEntity'
 import { Camera } from './Camera'
@@ -205,8 +205,8 @@ export class GameManager {
     if (this.healingChannelUI.isActive()) {
       const healComplete = this.healingChannelUI.updateChannel(currentTime, this.player.x, this.player.y)
       if (healComplete) {
-        // Apply healing
-        this.player.heal(50)
+        // Apply healing from config
+        this.player.heal(HEALING_CONFIG.HEAL_AMOUNT)
         // Consume healing item
         this.playerInventory.useHealing()
         this.hotbarUI.updateDisplay()
@@ -286,11 +286,17 @@ export class GameManager {
     // Check box collisions with bullets
     this.checkBoxCollisions()
 
+    // Check pillar collisions with bullets
+    this.checkPillarCollisions()
+
     // Check destroyed boxes and spawn items
     this.itemSpawnManager.checkDestroyedBoxes()
 
     // Check box collisions with player/entities (can't walk through)
     this.checkBoxEntityCollisions()
+
+    // Check pillar collisions with player/entities
+    this.checkPillarEntityCollisions()
 
     // Check if player is dead
     if (!this.player.isAlive()) {
@@ -421,17 +427,57 @@ export class GameManager {
     }
   }
 
+  private checkPillarCollisions(): void {
+    const pillars = this.itemSpawnManager.getAllPillars()
+    const allBullets = [...this.player.bullets, ...this.dummyManager.getAllBullets()]
+
+    for (const bullet of allBullets) {
+      if (!bullet.isAlive) continue
+
+      for (const pillar of pillars) {
+        // Check collision
+        const dx = bullet.x - pillar.x
+        const dy = bullet.y - pillar.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        if (distance < pillar.getRadius()) {
+          // Hit pillar - bullet stops
+          bullet.onHit()
+          break
+        }
+      }
+    }
+  }
+
+  private checkPillarEntityCollisions(): void {
+    const pillars = this.itemSpawnManager.getAllPillars()
+    const allEntities: BaseEntity[] = [this.player, ...this.dummyManager.getAliveDummies()]
+
+    for (const entity of allEntities) {
+      if (!entity.isAlive()) continue
+
+      for (const pillar of pillars) {
+        // Check collision
+        const dx = entity.x - pillar.x
+        const dy = entity.y - pillar.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const minDistance = entity.getRadius() + pillar.getRadius()
+
+        if (distance < minDistance) {
+          // Push entity away from pillar
+          const overlap = minDistance - distance
+          const pushAngle = Math.atan2(dy, dx)
+          entity.setPosition(entity.x + Math.cos(pushAngle) * overlap, entity.y + Math.sin(pushAngle) * overlap)
+        }
+      }
+    }
+  }
+
   private checkMeleeBoxAttack(): void {
     const weapon = this.playerInventory.getCurrentWeapon()
-    console.log('checkMeleeBoxAttack called, weapon:', weapon)
     if (!weapon || !weapon.isMelee) return
 
     const boxes = this.itemSpawnManager.getAllBoxes()
-    console.log(`Player at (${this.player.x}, ${this.player.y})`)
-    console.log('Number of boxes:', boxes.length)
-
-    let closestDistance = Infinity
-    let closestBox = null
 
     for (const box of boxes) {
       if (box.isDestroyed) continue
@@ -443,23 +489,11 @@ export class GameManager {
       // Check distance to edge of box, not center
       const distanceToEdge = distanceToCenter - box.getRadius()
 
-      if (distanceToEdge < closestDistance) {
-        closestDistance = distanceToEdge
-        closestBox = box
-      }
-
       // Check if box edge is in melee range
       if (distanceToEdge <= weapon.range) {
-        console.log('Box in range! Applying damage')
         box.takeDamage(weapon.damage)
         break // Only hit one box per attack
       }
-    }
-
-    if (closestBox) {
-      console.log(
-        `Closest box at (${closestBox.x}, ${closestBox.y}), distance to edge: ${closestDistance.toFixed(2)}, need: ${weapon.range}`
-      )
     }
   }
 
