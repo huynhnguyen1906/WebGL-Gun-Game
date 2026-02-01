@@ -157,11 +157,11 @@ export const HEALING_CONFIG = {
 // ===== SPAWN CONFIG =====
 export const SPAWN_CONFIG = {
   BOXES: {
-    RIFLE: 5, // Increased from 3
-    SNIPER: 3, // Increased from 2
-    SHOTGUN: 3, // Increased from 2
-    PISTOL: 4, // Increased from 3
-    HEALING: 7, // Increased from 5
+    RIFLE: 6, // Increased from 3
+    SNIPER: 5, // Increased from 2
+    SHOTGUN: 5, // Increased from 2
+    PISTOL: 10, // Increased from 3
+    HEALING: 11, // Increased from 5
   },
   MIN_DISTANCE_BETWEEN_OBSTACLES: 150, // Min distance between boxes/pillars
   AVOID_PLAYER_RADIUS: 500, // Avoid spawning near player

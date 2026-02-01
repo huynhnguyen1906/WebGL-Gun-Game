@@ -15,6 +15,7 @@ import { InputManager } from './InputManager'
 import { HealingPickup, ItemType, WeaponPickup } from './ItemPickup'
 import { ItemSpawnManager } from './ItemSpawnManager'
 import { GameMap } from './Map'
+import { MiniMap } from './MiniMap'
 import { PickupPromptUI } from './PickupPromptUI'
 import { Player } from './Player'
 import { PlayerInventory, type SlotTypeValue } from './PlayerInventory'
@@ -38,6 +39,7 @@ export class GameManager {
   private pickupPromptUI: PickupPromptUI
   private healingChannelUI: HealingChannelUI
   private reloadUI: ReloadUI
+  private miniMap: MiniMap
   private worldContainer: PIXI.Container
   private uiContainer: PIXI.Container
   private lastTime: number = 0
@@ -106,6 +108,9 @@ export class GameManager {
 
     this.reloadUI = new ReloadUI()
     this.worldContainer.addChild(this.reloadUI.getContainer())
+
+    this.miniMap = new MiniMap(this.app.screen.width, this.app.screen.height)
+    this.uiContainer.addChild(this.miniMap.getContainer())
 
     // Connect respawn callback
     this.gameOverUI.setRespawnCallback(() => {
@@ -306,6 +311,9 @@ export class GameManager {
     // Update camera to follow player
     this.camera.setTarget(this.player.x, this.player.y)
     this.camera.update()
+
+    // Update minimap
+    this.miniMap.update(this.player.x, this.player.y)
   }
 
   private handlePickup(): void {
@@ -538,6 +546,7 @@ export class GameManager {
     this.healingChannelUI.destroy()
     this.reloadUI.destroy()
     this.activeItemDisplay.destroy()
+    this.miniMap.destroy()
     this.app.destroy(true, { children: true })
   }
 }
