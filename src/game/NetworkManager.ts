@@ -270,12 +270,12 @@ export class NetworkManager {
       })
 
       this.socket.on('bullet_destroyed', (data: { bulletId: string; playerId: number }) => {
-        console.log(`🔌 NetworkManager received bullet_destroyed event:`, data)
+        console.log(`🔌🔌🔌 NetworkManager SOCKET EVENT bullet_destroyed:`, JSON.stringify(data))
         if (this.onBulletDestroyed) {
-          console.log('✅ Calling onBulletDestroyed callback')
+          console.log('✅✅✅ Calling onBulletDestroyed callback with data:', data)
           this.onBulletDestroyed(data)
         } else {
-          console.warn('⚠️ onBulletDestroyed callback is NULL!')
+          console.error('❌❌❌ onBulletDestroyed callback is NULL!')
         }
       })
 

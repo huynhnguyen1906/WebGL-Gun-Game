@@ -943,8 +943,28 @@ export class GameManager {
         }
       }
 
-      // Also check local bullets hitting local player (edge case: self-damage from reflections, etc)
-      // NOTE: Removed remote bullet checking - each client only validates their own bullets
+      // Check REMOTE player bullets hitting LOCAL player (visual only, no damage)
+      // Damage is already handled by shooter's client and server validation
+      for (const remotePlayer of this.remotePlayers.values()) {
+        for (const bullet of remotePlayer.bullets) {
+          if (!bullet.isAlive || bullet.isShrinking) continue
+
+          if (!this.player.isAlive()) continue
+
+          const dx = bullet.x - this.player.x
+          const dy = bullet.y - this.player.y
+          const distance = Math.sqrt(dx * dx + dy * dy)
+
+          // Check if bullet hit local player
+          if (distance < 25) {
+            // Destroy bullet locally (no damage, already handled by shooter)
+            console.log(`💥 Remote bullet ${bullet.id} hit local player (visual destroy only)`)
+            bullet.onHit()
+            break
+          }
+        }
+      }
+
       return
     }
 
@@ -980,9 +1000,9 @@ export class GameManager {
     // Multiplayer mode - use server boxes (client-side only for visuals, no damage)
     if (this.isMultiplayer && this.serverBoxManager) {
       const boxes = this.serverBoxManager.getAllBoxes()
-      const allBullets = this.player.bullets
 
-      for (const bullet of allBullets) {
+      // Check LOCAL player bullets (send damage + broadcast destroy)
+      for (const bullet of this.player.bullets) {
         if (!bullet.isAlive) continue
 
         for (const box of boxes) {
@@ -1006,6 +1026,29 @@ export class GameManager {
           }
         }
       }
+
+      // Check REMOTE player bullets (local collision only, no damage/broadcast)
+      for (const remotePlayer of this.remotePlayers.values()) {
+        for (const bullet of remotePlayer.bullets) {
+          if (!bullet.isAlive || bullet.isShrinking) continue
+
+          for (const box of boxes) {
+            if (box.isDestroyed) continue
+
+            const dx = bullet.x - box.x
+            const dy = bullet.y - box.y
+            const distance = Math.sqrt(dx * dx + dy * dy)
+
+            if (distance < box.getRadius()) {
+              // Hit box - destroy bullet locally only (no server interaction)
+              console.log(`💥 Remote bullet ${bullet.id} hit box locally`)
+              bullet.onHit()
+              break
+            }
+          }
+        }
+      }
+
       return
     }
 
@@ -1096,9 +1139,9 @@ export class GameManager {
     // Multiplayer mode - use server pillars
     if (this.isMultiplayer && this.serverBoxManager) {
       const pillars = this.serverBoxManager.getAllPillars()
-      const allBullets = this.player.bullets
 
-      for (const bullet of allBullets) {
+      // Check LOCAL player bullets (broadcast destroy)
+      for (const bullet of this.player.bullets) {
         if (!bullet.isAlive) continue
 
         for (const pillar of pillars) {
@@ -1119,6 +1162,27 @@ export class GameManager {
           }
         }
       }
+
+      // Check REMOTE player bullets (local collision only)
+      for (const remotePlayer of this.remotePlayers.values()) {
+        for (const bullet of remotePlayer.bullets) {
+          if (!bullet.isAlive || bullet.isShrinking) continue
+
+          for (const pillar of pillars) {
+            const dx = bullet.x - pillar.x
+            const dy = bullet.y - pillar.y
+            const distance = Math.sqrt(dx * dx + dy * dy)
+
+            if (distance < pillar.radius) {
+              // Hit pillar - destroy bullet locally only
+              console.log(`💥 Remote bullet ${bullet.id} hit pillar locally`)
+              bullet.onHit()
+              break
+            }
+          }
+        }
+      }
+
       return
     }
 

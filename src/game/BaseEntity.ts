@@ -256,13 +256,20 @@ export abstract class BaseEntity {
         const startX = this.x + Math.cos(angle) * depthOffset + Math.cos(angle + Math.PI / 2) * lateralOffset
         const startY = this.y + Math.sin(angle) * depthOffset + Math.sin(angle + Math.PI / 2) * lateralOffset
 
-        const bullet = new Bullet(startX, startY, pelletAngle, speed, range, damage, this)
+        // Calculate vx, vy directly instead of passing angle and speed
+        const vx = Math.cos(pelletAngle) * speed
+        const vy = Math.sin(pelletAngle) * speed
+
+        const bullet = new Bullet(startX, startY, vx, vy, range, damage, this)
         this.bullets.push(bullet)
         bullets.push(bullet)
       }
     } else {
-      // Single bullet
-      const bullet = new Bullet(this.x, this.y, angle, speed, range, damage, this)
+      // Single bullet - calculate vx, vy directly
+      const vx = Math.cos(angle) * speed
+      const vy = Math.sin(angle) * speed
+
+      const bullet = new Bullet(this.x, this.y, vx, vy, range, damage, this)
       this.bullets.push(bullet)
       bullets.push(bullet)
     }

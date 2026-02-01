@@ -38,8 +38,8 @@ export class Bullet {
   constructor(
     x: number,
     y: number,
-    angleOrVx: number, // Can be angle (when speed provided) or vx (when vy provided)
-    speedOrVy: number, // Can be speed (when angle provided) or vy (when vx provided)
+    vx: number, // Velocity X
+    vy: number, // Velocity Y
     range: number,
     damage: number = 0,
     owner: BaseEntity,
@@ -54,27 +54,11 @@ export class Bullet {
     this.damage = damage
     this.owner = owner
 
-    // Check if we got vx,vy (server bullets) or angle,speed (client bullets)
-    // If angleOrVx is between -PI and PI, it's likely an angle
-    // Otherwise it's vx (which is speed * cos(angle), typically larger)
-    const isVelocityMode = Math.abs(angleOrVx) > Math.PI || Math.abs(speedOrVy) > 100
-
-    if (isVelocityMode) {
-      // Server mode: direct vx, vy
-      this.vx = angleOrVx
-      this.vy = speedOrVy
-      this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy)
-      this.angle = Math.atan2(this.vy, this.vx)
-    } else {
-      // Client mode: angle and speed
-      this.angle = angleOrVx
-      this.speed = speedOrVy
-      this.vx = Math.cos(this.angle) * this.speed
-      this.vy = Math.sin(this.angle) * this.speed
-    }
-
-    // TTL = RANGE / SPEED (seconds)
-    this.maxTTL = range / this.speed
+    // Use vx, vy directly
+    this.vx = vx
+    this.vy = vy
+    this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy)
+    this.angle = Math.atan2(this.vy, this.vx)
     this.ttl = this.maxTTL
 
     // Create graphics container
