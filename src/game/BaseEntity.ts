@@ -22,6 +22,7 @@ export abstract class BaseEntity {
   protected body!: PIXI.Graphics
   protected leftArm!: PIXI.Graphics
   protected rightArm!: PIXI.Graphics
+  protected weaponLine!: PIXI.Graphics // Line showing gun direction
   protected hpBar!: PIXI.Graphics
   protected hpBarBg!: PIXI.Graphics
 
@@ -57,6 +58,7 @@ export abstract class BaseEntity {
     this.container.y = y
 
     this.createBody()
+    this.createWeaponLine()
     this.createArms()
     this.createHpBar()
   }
@@ -77,6 +79,13 @@ export abstract class BaseEntity {
     this.body.fill({ color: COLOR })
 
     this.container.addChild(this.body)
+  }
+
+  protected createWeaponLine(): void {
+    // Create weapon line (shown when using guns)
+    this.weaponLine = new PIXI.Graphics()
+    this.container.addChild(this.weaponLine)
+    this.weaponLine.visible = false // Hidden by default
   }
 
   protected createArms(): void {
@@ -129,18 +138,51 @@ export abstract class BaseEntity {
     const { ARM } = this.visualConfig
     const { OFFSET_DISTANCE, SPREAD_RAD } = ARM
 
-    // Left arm (only update if not punching)
-    if (!this.isPunchingLeft) {
-      const leftAngle = this.rotation - SPREAD_RAD / 2
-      this.leftArm.x = Math.cos(leftAngle) * OFFSET_DISTANCE
-      this.leftArm.y = Math.sin(leftAngle) * OFFSET_DISTANCE
-    }
+    // Check if current weapon is a gun (not melee)
+    const weaponData = getWeaponById(this.currentWeaponId)
+    const isUsingGun = weaponData && !weaponData.isMelee
 
-    // Right arm (only update if not punching)
-    if (!this.isPunchingRight) {
-      const rightAngle = this.rotation + SPREAD_RAD / 2
-      this.rightArm.x = Math.cos(rightAngle) * OFFSET_DISTANCE
-      this.rightArm.y = Math.sin(rightAngle) * OFFSET_DISTANCE
+    if (isUsingGun && !this.isPunchingLeft && !this.isPunchingRight) {
+      // Using gun: show weapon line and position arms on it
+      this.weaponLine.visible = true
+
+      // Draw weapon line from body towards aim direction
+      const lineLength = 30 // Length of the weapon line
+      const endX = Math.cos(this.rotation) * lineLength
+      const endY = Math.sin(this.rotation) * lineLength
+
+      this.weaponLine.clear()
+      this.weaponLine.moveTo(0, 0)
+      this.weaponLine.lineTo(endX, endY)
+      this.weaponLine.stroke({ color: this.visualConfig.ARM.COLOR, width: 3 })
+
+      // Position arms on the weapon line
+      // Left hand closer to body (at 40% of line length)
+      const leftHandDist = lineLength * 0.4
+      this.leftArm.x = Math.cos(this.rotation) * leftHandDist
+      this.leftArm.y = Math.sin(this.rotation) * leftHandDist
+
+      // Right hand further (at 80% of line length)
+      const rightHandDist = lineLength * 0.8
+      this.rightArm.x = Math.cos(this.rotation) * rightHandDist
+      this.rightArm.y = Math.sin(this.rotation) * rightHandDist
+    } else {
+      // Using melee or punching: hide weapon line, use spread arms
+      this.weaponLine.visible = false
+
+      // Left arm (only update if not punching)
+      if (!this.isPunchingLeft) {
+        const leftAngle = this.rotation - SPREAD_RAD / 2
+        this.leftArm.x = Math.cos(leftAngle) * OFFSET_DISTANCE
+        this.leftArm.y = Math.sin(leftAngle) * OFFSET_DISTANCE
+      }
+
+      // Right arm (only update if not punching)
+      if (!this.isPunchingRight) {
+        const rightAngle = this.rotation + SPREAD_RAD / 2
+        this.rightArm.x = Math.cos(rightAngle) * OFFSET_DISTANCE
+        this.rightArm.y = Math.sin(rightAngle) * OFFSET_DISTANCE
+      }
     }
   }
 

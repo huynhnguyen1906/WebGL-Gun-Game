@@ -57,8 +57,8 @@ export const WEAPONS: WeaponData[] = [
     damage: 20,
     speed: 1000,
     range: 500,
-    cooldownMs: 300,
-    magazineSize: 12,
+    cooldownMs: 1000,
+    magazineSize: 7,
     maxReserveAmmo: 999,
     reloadTimeMs: 1500,
     infiniteAmmo: true,
@@ -66,7 +66,7 @@ export const WEAPONS: WeaponData[] = [
   {
     id: WeaponType.RIFLE,
     name: 'Rifle',
-    damage: 30,
+    damage: 20,
     speed: 1000,
     range: 1000,
     cooldownMs: 150,
@@ -83,12 +83,12 @@ export const WEAPONS: WeaponData[] = [
     cooldownMs: 1200,
     magazineSize: 5,
     maxReserveAmmo: 20,
-    reloadTimeMs: 3000,
+    reloadTimeMs: 2500,
   },
   {
     id: WeaponType.SHOTGUN,
     name: 'Shotgun',
-    damage: 8, // Per pellet
+    damage: 11, // Per pellet
     speed: 1000,
     range: 700,
     cooldownMs: 1200,
@@ -96,7 +96,7 @@ export const WEAPONS: WeaponData[] = [
     spreadAngle: 8,
     magazineSize: 6,
     maxReserveAmmo: 24,
-    reloadTimeMs: 2500,
+    reloadTimeMs: 2000,
   },
 ]
 
