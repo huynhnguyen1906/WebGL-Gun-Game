@@ -109,7 +109,7 @@ export class PlayerInventory {
       this.slots.set(SlotType.SECONDARY, {
         slotNumber: SlotType.SECONDARY,
         weaponType: WeaponType.PISTOL,
-        ammo: { magazine: 999, reserve: 999 }, // Infinite ammo
+        ammo: { magazine: 7, reserve: 999 }, // 7 rounds in mag, infinite reserve
       })
       return true
     }
@@ -157,9 +157,6 @@ export class PlayerInventory {
     const slot = this.slots.get(slotNumber)
     if (!slot || !slot.ammo) return false
 
-    // Infinite ammo check
-    if (slot.ammo.magazine === 999) return true
-
     if (slot.ammo.magazine > 0) {
       slot.ammo.magazine -= 1
       return true
@@ -179,15 +176,20 @@ export class PlayerInventory {
     // Check if already full
     if (slot.ammo.magazine >= weaponData.magazineSize) return false
 
-    // Check if have reserve ammo
-    if (slot.ammo.reserve === 0) return false
+    // Check if have reserve ammo (skip for infinite ammo weapons)
+    if (!weaponData.infiniteAmmo && slot.ammo.reserve === 0) return false
 
     // Calculate ammo needed
     const needed = weaponData.magazineSize - slot.ammo.magazine
-    const toReload = Math.min(needed, slot.ammo.reserve)
 
-    slot.ammo.magazine += toReload
-    slot.ammo.reserve -= toReload
+    // For infinite ammo weapons (Pistol), just refill without consuming reserve
+    if (weaponData.infiniteAmmo) {
+      slot.ammo.magazine = weaponData.magazineSize
+    } else {
+      const toReload = Math.min(needed, slot.ammo.reserve)
+      slot.ammo.magazine += toReload
+      slot.ammo.reserve -= toReload
+    }
 
     return true
   }
