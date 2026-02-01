@@ -61,6 +61,8 @@ export class GameManager {
   private isGameOver: boolean = false
   private lastMeleeAttackTime: number = 0
   private lastShootTime: number = 0 // Track shooting cooldown
+  private sentHits: Set<string> = new Set() // Track sent hits to prevent duplicates
+  private destroyedBullets: Set<string> = new Set() // Track destroyed bullets to prevent duplicate broadcasts
 
   constructor(app: PIXI.Application, multiplayer: boolean = false) {
     this.app = app
@@ -222,9 +224,14 @@ export class GameManager {
     }
 
     this.networkManager.onBullets = (data: BulletData) => {
+      console.log(
+        `📦 Received bullets event: playerId=${data.playerId}, myId=${this.networkManager?.getPlayerId()}, bulletCount=${data.bullets.length}`
+      )
+
       // Check if bullets are from local player or remote player
       if (data.playerId === this.networkManager?.getPlayerId()) {
         // Local player bullets from server (authoritative)
+        console.log('↩️ Local player bullets (skipping client-side creation)')
         // Clear client prediction bullets and use server bullets instead
         for (const bulletData of data.bullets) {
           const bullet = this.player.createBulletFromServer(bulletData)
@@ -232,12 +239,19 @@ export class GameManager {
         }
       } else {
         // Remote player bullets
+        console.log(`👤 Remote player ${data.playerId} bullets`)
         const remotePlayer = this.remotePlayers.get(data.playerId)
         if (remotePlayer) {
+          console.log(`✅ Remote player found, creating ${data.bullets.length} bullets`)
           for (const bulletData of data.bullets) {
             const bullet = remotePlayer.createBulletFromServer(bulletData)
+            console.log(`🔫 Created remote bullet: id=${bulletData.id}, x=${bulletData.x}, y=${bulletData.y}`)
             this.worldContainer.addChild(bullet.getGraphics())
           }
+          console.log(`📊 Remote player now has ${remotePlayer.bullets.length} total bullets`)
+        } else {
+          console.error(`❌ Remote player ${data.playerId} NOT FOUND!`)
+          console.log('Available remote players:', Array.from(this.remotePlayers.keys()))
         }
       }
     }
@@ -273,7 +287,10 @@ export class GameManager {
       const remotePlayer = this.remotePlayers.get(data.playerId)
       if (remotePlayer) {
         remotePlayer.setDead(true)
-        // Optional: Add death animation/effects here
+        // Fade out animation then hide
+        this.fadeOutEntity(remotePlayer.getContainer(), () => {
+          remotePlayer.getContainer().visible = false
+        })
         console.log(`Player ${data.playerId} was killed by Player ${data.killerId}`)
       }
     }
@@ -283,6 +300,9 @@ export class GameManager {
         // Local player respawned
         this.player.respawn(data.x, data.y)
         this.isGameOver = false
+        this.gameOverUI.hide()
+        this.player.getContainer().alpha = 1.0
+        this.player.getContainer().visible = true
         console.log('You respawned!')
       } else {
         // Remote player respawned
@@ -290,7 +310,22 @@ export class GameManager {
         if (remotePlayer) {
           remotePlayer.respawn(data.x, data.y)
           remotePlayer.setDead(false)
+          remotePlayer.getContainer().alpha = 1.0
+          remotePlayer.getContainer().visible = true
           console.log(`Player ${data.playerId} respawned`)
+        }
+      }
+    }
+
+    this.networkManager.onPlayerHealed = (data: { playerId: number; hp: number; maxHp: number }) => {
+      if (data.playerId === this.networkManager?.getPlayerId()) {
+        // Local player healed - update HP bar
+        this.player.setHp(data.hp)
+      } else {
+        // Remote player healed
+        const remotePlayer = this.remotePlayers.get(data.playerId)
+        if (remotePlayer) {
+          remotePlayer.setHp(data.hp)
         }
       }
     }
@@ -302,33 +337,38 @@ export class GameManager {
       }
     }
 
-    this.networkManager.onInventoryUpdate = (data: any) => {
+    this.networkManager.onInventoryUpdate = (data: { inventory: unknown; currentWeapon: string }) => {
       // Sync inventory from server
+      const inventory = data.inventory as {
+        primary: { id: string; magazine: number; reserve: number } | null
+        pistol: { id: string; magazine: number; reserve: number } | null
+        healing: number
+      }
 
       // Update primary weapon
-      if (data.inventory.primary) {
+      if (inventory.primary) {
         this.playerInventory.addWeapon(
-          data.inventory.primary.id as WeaponTypeValue,
-          data.inventory.primary.magazine,
-          data.inventory.primary.reserve
+          inventory.primary.id as WeaponTypeValue,
+          inventory.primary.magazine,
+          inventory.primary.reserve
         )
       }
 
       // Update pistol
-      if (data.inventory.pistol) {
+      if (inventory.pistol) {
         this.playerInventory.addWeapon(
-          data.inventory.pistol.id as WeaponTypeValue,
-          data.inventory.pistol.magazine,
-          data.inventory.pistol.reserve
+          inventory.pistol.id as WeaponTypeValue,
+          inventory.pistol.magazine,
+          inventory.pistol.reserve
         )
       }
 
       // Update healing count
-      if (data.inventory.healing > 0) {
+      if (inventory.healing > 0) {
         // Reset and add healing items
         const healingSlot = this.playerInventory['slots'].get(3) // SlotType.HEALING
         if (healingSlot) {
-          healingSlot.healingCount = data.inventory.healing
+          healingSlot.healingCount = inventory.healing
         }
       }
 
@@ -400,6 +440,50 @@ export class GameManager {
       }
     }
 
+    this.networkManager.onBulletDestroyed = (data: { bulletId: string; playerId: number }) => {
+      console.log(
+        `📥 Received bullet_destroyed: bulletId=${data.bulletId}, shooterId=${data.playerId}, myId=${this.networkManager?.getPlayerId()}`
+      )
+
+      // Destroy bullet from remote player
+      if (data.playerId === this.networkManager?.getPlayerId()) {
+        // Don't destroy local bullets (already handled locally)
+        console.log('⏭️ Skipping local bullet destruction (already handled)')
+        return
+      }
+
+      const remotePlayer = this.remotePlayers.get(data.playerId)
+      if (remotePlayer) {
+        console.log(
+          `🔍 Searching for bullet in remote player ${data.playerId}, total bullets: ${remotePlayer.bullets.length}`
+        )
+        const bullet = remotePlayer.bullets.find((b) => b.id === data.bulletId)
+        if (bullet) {
+          console.log(`✅ Found and destroying bullet ${data.bulletId}`)
+          bullet.onHit()
+        } else {
+          console.log(`⏳ Bullet ${data.bulletId} not found yet, scheduling retry...`)
+          // Bullet might not be created yet due to network timing
+          // Retry after a short delay
+          setTimeout(() => {
+            const retryBullet = remotePlayer.bullets.find((b) => b.id === data.bulletId)
+            if (retryBullet) {
+              console.log(`✅ Found bullet on retry, destroying ${data.bulletId}`)
+              retryBullet.onHit()
+            } else {
+              console.log(`❌ Bullet ${data.bulletId} not found even after retry`)
+              console.log(
+                'Available bullet IDs:',
+                remotePlayer.bullets.map((b) => b.id)
+              )
+            }
+          }, 50) // Wait 50ms for bullet creation
+        }
+      } else {
+        console.log(`❌ Remote player ${data.playerId} not found`)
+      }
+    }
+
     // Connect to server
     await this.networkManager.connect()
   }
@@ -408,6 +492,12 @@ export class GameManager {
   private handleLocalPlayerDeath(): void {
     console.log('You died!')
     this.isGameOver = true
+
+    // Show game over UI
+    this.gameOverUI.show()
+
+    // Fade out player
+    this.fadeOutEntity(this.player.getContainer())
 
     // Auto-respawn after 3 seconds in multiplayer
     setTimeout(() => {
@@ -419,11 +509,12 @@ export class GameManager {
 
   // Spawn remote player
   private spawnRemotePlayer(playerData: PlayerData): void {
-    console.log(`Spawning remote player ${playerData.id} at (${playerData.x}, ${playerData.y})`)
+    console.log(`🌟 Spawning remote player ${playerData.id} at (${playerData.x}, ${playerData.y})`)
     const remotePlayer = new RemotePlayer(playerData.id, playerData.x, playerData.y)
     this.remotePlayers.set(playerData.id, remotePlayer)
     this.worldContainer.addChild(remotePlayer.getContainer())
-    console.log(`Remote player ${playerData.id} spawned. Current position: (${remotePlayer.x}, ${remotePlayer.y})`)
+    console.log(`✅ Remote player ${playerData.id} spawned successfully`)
+    console.log(`📋 All remote players:`, Array.from(this.remotePlayers.keys()))
   }
 
   // Remove remote player
@@ -542,6 +633,11 @@ export class GameManager {
     // Update player movement (client prediction)
     this.player.move(deltaSeconds, movement.x, movement.y, (x, y, r) => this.gameMap.clampPosition(x, y, r))
 
+    // Check box and pillar collisions BEFORE sending position to server
+    // This ensures we send the corrected position after collision resolution
+    this.checkBoxEntityCollisions()
+    this.checkPillarEntityCollisions()
+
     // Send position to server in multiplayer mode (every frame like reference)
     if (this.isMultiplayer && this.networkManager?.isConnected()) {
       // Determine direction based on last movement
@@ -574,6 +670,11 @@ export class GameManager {
         // Consume healing item
         this.playerInventory.useHealing()
         this.hotbarUI.updateDisplay()
+
+        // Send heal event to server in multiplayer
+        if (this.isMultiplayer && this.networkManager?.isConnected()) {
+          this.networkManager.sendHeal(HEALING_CONFIG.HEAL_AMOUNT)
+        }
       }
     }
 
@@ -690,6 +791,13 @@ export class GameManager {
       this.dummyManager.updateBullets(deltaSeconds)
     }
 
+    // Update remote player bullets in multiplayer
+    if (this.isMultiplayer) {
+      for (const remotePlayer of this.remotePlayers.values()) {
+        remotePlayer.updateBullets(deltaSeconds)
+      }
+    }
+
     // Check collisions
     this.checkCollisions()
 
@@ -704,11 +812,11 @@ export class GameManager {
       this.itemSpawnManager.checkDestroyedBoxes()
     }
 
-    // Check box collisions with player/entities (can't walk through)
-    this.checkBoxEntityCollisions()
-
-    // Check pillar collisions with player/entities
-    this.checkPillarEntityCollisions()
+    // Check box/pillar collisions with dummies (single player only)
+    // Local player collision already checked before sending position to server
+    if (this.dummyManager) {
+      this.checkDummyObstacleCollisions()
+    }
 
     // Check if player is dead
     if (!this.player.isAlive()) {
@@ -805,9 +913,42 @@ export class GameManager {
   }
 
   private checkCollisions(): void {
-    // In multiplayer, skip collision detection - server handles it
-    if (this.isMultiplayer) return
+    // In multiplayer, check bullet collision with players and send to server
+    if (this.isMultiplayer) {
+      // Only check LOCAL player bullets hitting remote players
+      // Each client is responsible for their own bullets only
+      for (const bullet of this.player.bullets) {
+        if (!bullet.isAlive || bullet.isShrinking) continue
 
+        // Check collision with remote players
+        for (const [playerId, remotePlayer] of this.remotePlayers) {
+          if (!remotePlayer.isAlive()) continue
+
+          const dx = bullet.x - remotePlayer.x
+          const dy = bullet.y - remotePlayer.y
+          const distance = Math.sqrt(dx * dx + dy * dy)
+
+          // Check if bullet hit player (use player radius + small buffer)
+          if (distance < 25) {
+            const hitKey = `${bullet.id}_${playerId}`
+            if (!this.sentHits.has(hitKey)) {
+              // Send hit validation to server
+              console.log(`🎯 Sending hit: bulletId=${bullet.id}, targetId=${playerId}, damage=${bullet.damage}`)
+              this.networkManager?.sendHit(bullet.id, playerId, bullet.damage)
+              this.sentHits.add(hitKey)
+              bullet.onHit()
+            }
+            break
+          }
+        }
+      }
+
+      // Also check local bullets hitting local player (edge case: self-damage from reflections, etc)
+      // NOTE: Removed remote bullet checking - each client only validates their own bullets
+      return
+    }
+
+    // Single player mode
     // Get all entities (player + dummies if in single player)
     const allEntities: BaseEntity[] = [this.player]
     if (this.dummyManager) {
@@ -854,6 +995,12 @@ export class GameManager {
           if (distance < box.getRadius()) {
             // Hit box - send to server for validation
             this.networkManager?.sendBoxDamage(box.id, bullet.damage)
+            // Broadcast bullet destroyed to other clients (only once per bullet)
+            if (!this.destroyedBullets.has(bullet.id)) {
+              console.log(`📣 Broadcasting bullet destroyed: ${bullet.id} (hit box)`)
+              this.networkManager?.sendBulletDestroyed(bullet.id)
+              this.destroyedBullets.add(bullet.id)
+            }
             bullet.onHit()
             break
           }
@@ -961,6 +1108,12 @@ export class GameManager {
 
           if (distance < pillar.radius) {
             // Hit pillar - bullet stops
+            // Broadcast bullet destroyed to other clients (only once per bullet)
+            if (!this.destroyedBullets.has(bullet.id)) {
+              console.log(`📣 Broadcasting bullet destroyed: ${bullet.id} (hit pillar)`)
+              this.networkManager?.sendBulletDestroyed(bullet.id)
+              this.destroyedBullets.add(bullet.id)
+            }
             bullet.onHit()
             break
           }
@@ -1092,9 +1245,67 @@ export class GameManager {
     }
   }
 
+  // Helper method to check dummy obstacle collisions (single player only)
+  private checkDummyObstacleCollisions(): void {
+    if (!this.itemSpawnManager || !this.dummyManager) return
+
+    const boxes = this.itemSpawnManager.getAllBoxes()
+    const pillars = this.itemSpawnManager.getAllPillars()
+    const dummies = this.dummyManager.getAliveDummies()
+
+    for (const dummy of dummies) {
+      if (!dummy.isAlive()) continue
+
+      // Check box collisions
+      for (const box of boxes) {
+        if (box.isDestroyed) continue
+
+        const dx = dummy.x - box.x
+        const dy = dummy.y - box.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const minDistance = dummy.getRadius() + box.getRadius()
+
+        if (distance < minDistance) {
+          const overlap = minDistance - distance
+          const pushAngle = Math.atan2(dy, dx)
+          dummy.setPosition(dummy.x + Math.cos(pushAngle) * overlap, dummy.y + Math.sin(pushAngle) * overlap)
+        }
+      }
+
+      // Check pillar collisions
+      for (const pillar of pillars) {
+        const dx = dummy.x - pillar.x
+        const dy = dummy.y - pillar.y
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const minDistance = dummy.getRadius() + pillar.getRadius()
+
+        if (distance < minDistance) {
+          const overlap = minDistance - distance
+          const pushAngle = Math.atan2(dy, dx)
+          dummy.setPosition(dummy.x + Math.cos(pushAngle) * overlap, dummy.y + Math.sin(pushAngle) * overlap)
+        }
+      }
+    }
+  }
+
   private onPlayerDeath(): void {
     this.isGameOver = true
     this.gameOverUI.show()
+  }
+
+  // Fade out animation for entity death
+  private fadeOutEntity(container: PIXI.Container, onComplete?: () => void): void {
+    const fadeSpeed = 0.05
+    const animate = () => {
+      container.alpha -= fadeSpeed
+      if (container.alpha <= 0) {
+        container.alpha = 0
+        if (onComplete) onComplete()
+      } else {
+        requestAnimationFrame(animate)
+      }
+    }
+    animate()
   }
 
   private respawnPlayer(): void {

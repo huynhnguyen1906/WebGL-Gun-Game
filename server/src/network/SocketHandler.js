@@ -47,7 +47,8 @@ export class SocketHandler {
       if (!player) return
 
       // Update player position (client calculates, server validates)
-      player.updatePosition(data)
+      // Pass boxManager to validate collisions with obstacles
+      player.updatePosition(data, this.gameState.boxManager)
 
       // Broadcast updated position to all other players
       socket.broadcast.emit('player:moved', {
@@ -147,6 +148,31 @@ export class SocketHandler {
             console.log(`Player ${result.targetId} died. Killed by Player ${shooter.id}`)
           }
         }
+      }
+    })
+
+    // Player heal
+    socket.on('heal', (data) => {
+      const player = this.gameState.getPlayer(socket.id)
+      if (!player || player.isDead) return
+
+      // Validate healing count
+      if (player.inventory.healing <= 0) return
+
+      // Apply heal
+      const healed = player.heal(data.amount)
+      if (healed) {
+        // Consume healing item
+        player.inventory.healing--
+
+        // Broadcast HP update to all players
+        io.emit('player_healed', {
+          playerId: player.id,
+          hp: player.hp,
+          maxHp: player.maxHp,
+        })
+
+        console.log(`Player ${player.id} healed for ${data.amount} HP (Current: ${player.hp}/${player.maxHp})`)
       }
     })
 
@@ -265,6 +291,20 @@ export class SocketHandler {
 
         console.log(`Player ${currentPlayer.id} reloaded ${data.weapon}`)
       }, reloadTimeMs)
+    })
+
+    // Bullet destroyed (hit pillar/box)
+    socket.on('bullet_destroyed', (data) => {
+      const player = this.gameState.getPlayer(socket.id)
+      if (!player) return
+
+      console.log(`📢 Broadcasting bullet_destroyed: bulletId=${data.bulletId}, shooterId=${player.id}`)
+
+      // Broadcast bullet destruction to all other clients
+      socket.broadcast.emit('bullet_destroyed', {
+        bulletId: data.bulletId,
+        playerId: player.id,
+      })
     })
 
     // Player disconnect

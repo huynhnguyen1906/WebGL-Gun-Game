@@ -35,8 +35,12 @@ export class Player {
   }
 
   // Update player position from client data (client-authoritative movement)
-  updatePosition(data) {
+  updatePosition(data, boxManager = null) {
     if (this.isDead) return
+
+    // Store old position for rollback if needed
+    const oldX = this.x
+    const oldY = this.y
 
     // Directly update position from client (server validates bounds)
     if (data.x !== undefined) this.x = data.x
@@ -50,6 +54,50 @@ export class Player {
     const radius = GAME_CONFIG.PLAYER.RADIUS
     this.x = Math.max(PADDING + radius, Math.min(SIZE - PADDING - radius, this.x))
     this.y = Math.max(PADDING + radius, Math.min(SIZE - PADDING - radius, this.y))
+
+    // Validate collision with boxes and pillars
+    if (boxManager) {
+      this.validateCollisions(boxManager)
+    }
+  }
+
+  // Validate and resolve collisions with obstacles
+  validateCollisions(boxManager) {
+    const playerRadius = GAME_CONFIG.PLAYER.RADIUS
+
+    // Check collision with boxes
+    for (const box of boxManager.boxes.values()) {
+      if (box.isDestroyed) continue
+
+      const dx = this.x - box.x
+      const dy = this.y - box.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const minDistance = playerRadius + box.radius
+
+      if (distance < minDistance) {
+        // Push player away from box
+        const overlap = minDistance - distance
+        const pushAngle = Math.atan2(dy, dx)
+        this.x += Math.cos(pushAngle) * overlap
+        this.y += Math.sin(pushAngle) * overlap
+      }
+    }
+
+    // Check collision with pillars
+    for (const pillar of boxManager.pillars.values()) {
+      const dx = this.x - pillar.x
+      const dy = this.y - pillar.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const minDistance = playerRadius + pillar.radius
+
+      if (distance < minDistance) {
+        // Push player away from pillar
+        const overlap = minDistance - distance
+        const pushAngle = Math.atan2(dy, dx)
+        this.x += Math.cos(pushAngle) * overlap
+        this.y += Math.sin(pushAngle) * overlap
+      }
+    }
   }
 
   // Take damage
@@ -64,6 +112,14 @@ export class Player {
     }
 
     return { killed: false, attackerId }
+  }
+
+  // Heal player
+  heal(amount) {
+    if (this.isDead) return false
+
+    this.hp = Math.min(this.hp + amount, this.maxHp)
+    return true
   }
 
   // Respawn player

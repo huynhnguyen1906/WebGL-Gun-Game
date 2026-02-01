@@ -16,6 +16,9 @@ interface BulletDataFromServer {
   rotation: number
   damage: number
   weapon: string
+  range: number
+  speed: number
+  spawnTime: number
 }
 
 export class RemotePlayer extends BaseEntity {
@@ -83,11 +86,24 @@ export class RemotePlayer extends BaseEntity {
 
   // Create bullet from server data
   createBulletFromServer(bulletData: BulletDataFromServer): Bullet {
-    const angle = Math.atan2(bulletData.vy, bulletData.vx)
-    const speed = Math.sqrt(bulletData.vx * bulletData.vx + bulletData.vy * bulletData.vy)
-    const range = 2000 // Default range
+    // Use vx, vy directly from server to avoid rounding errors
+    const bullet = new Bullet(
+      bulletData.x,
+      bulletData.y,
+      bulletData.vx,
+      bulletData.vy,
+      bulletData.range || 2000,
+      bulletData.damage,
+      this,
+      bulletData.id
+    )
 
-    const bullet = new Bullet(bulletData.x, bulletData.y, angle, speed, range, bulletData.damage, this)
+    // Adjust TTL based on elapsed time since spawn
+    if (bulletData.spawnTime) {
+      const elapsedSeconds = (Date.now() - bulletData.spawnTime) / 1000
+      bullet.setTTL(bullet.maxTTL - elapsedSeconds)
+    }
+
     this.bullets.push(bullet)
     return bullet
   }

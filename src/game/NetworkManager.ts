@@ -69,6 +69,9 @@ export interface BulletData {
     rotation: number
     damage: number
     weapon: string
+    range: number
+    speed: number
+    spawnTime: number
   }>
   playerId: number
 }
@@ -105,12 +108,14 @@ export class NetworkManager {
   public onDamage: ((data: DamageData) => void) | null
   public onPlayerDied: ((data: { playerId: number; killerId: number }) => void) | null
   public onPlayerRespawned: ((data: { playerId: number; x: number; y: number; hp: number }) => void) | null
+  public onPlayerHealed: ((data: { playerId: number; hp: number; maxHp: number }) => void) | null
   public onItemPicked: ((data: { itemId: number; playerId: number }) => void) | null
   public onInventoryUpdate: ((data: { inventory: unknown; currentWeapon: string }) => void) | null
   public onReloadComplete: ((data: { weapon: string; magazine: number; reserve: number }) => void) | null
   public onAmmoUpdate: ((data: { weapon: string; magazine: number; reserve: number }) => void) | null
   public onBoxDamaged: ((data: { boxId: number; hp: number; isDestroyed: boolean }) => void) | null
   public onItemDropped: ((item: ItemData) => void) | null
+  public onBulletDestroyed: ((data: { bulletId: string; playerId: number }) => void) | null
 
   constructor() {
     this.socket = null
@@ -128,12 +133,14 @@ export class NetworkManager {
     this.onDamage = null
     this.onPlayerDied = null
     this.onPlayerRespawned = null
+    this.onPlayerHealed = null
     this.onItemPicked = null
     this.onInventoryUpdate = null
     this.onReloadComplete = null
     this.onAmmoUpdate = null
     this.onBoxDamaged = null
     this.onItemDropped = null
+    this.onBulletDestroyed = null
   }
 
   // Connect to server
@@ -220,6 +227,12 @@ export class NetworkManager {
         }
       })
 
+      this.socket.on('player_healed', (data: { playerId: number; hp: number; maxHp: number }) => {
+        if (this.onPlayerHealed) {
+          this.onPlayerHealed(data)
+        }
+      })
+
       this.socket.on('item_picked', (data: { itemId: number; playerId: number }) => {
         if (this.onItemPicked) {
           this.onItemPicked(data)
@@ -253,6 +266,16 @@ export class NetworkManager {
       this.socket.on('item_dropped', (item: ItemData) => {
         if (this.onItemDropped) {
           this.onItemDropped(item)
+        }
+      })
+
+      this.socket.on('bullet_destroyed', (data: { bulletId: string; playerId: number }) => {
+        console.log(`🔌 NetworkManager received bullet_destroyed event:`, data)
+        if (this.onBulletDestroyed) {
+          console.log('✅ Calling onBulletDestroyed callback')
+          this.onBulletDestroyed(data)
+        } else {
+          console.warn('⚠️ onBulletDestroyed callback is NULL!')
         }
       })
 
@@ -321,6 +344,18 @@ export class NetworkManager {
   sendBoxDamage(boxId: number, damage: number): void {
     if (!this.connected) return
     this.socket?.emit('box_damage', { boxId, damage })
+  }
+
+  // Send heal event
+  sendHeal(amount: number): void {
+    if (!this.connected) return
+    this.socket?.emit('heal', { amount })
+  }
+
+  // Send bullet destroyed notification
+  sendBulletDestroyed(bulletId: string): void {
+    if (!this.connected) return
+    this.socket?.emit('bullet_destroyed', { bulletId })
   }
 
   // Disconnect from server

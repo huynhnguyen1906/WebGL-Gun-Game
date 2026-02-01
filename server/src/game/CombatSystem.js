@@ -7,6 +7,7 @@ import { GAME_CONFIG } from '../config/gameConfig.js'
 export class CombatSystem {
   constructor(gameState) {
     this.gameState = gameState
+    this.processedHits = new Set() // Track processed hits to prevent duplicates
   }
 
   // Handle player shooting
@@ -53,6 +54,9 @@ export class CombatSystem {
           rotation: angle,
           damage: weapon.damage,
           weapon: weapon.id,
+          spawnTime: now,
+          range: weapon.range,
+          speed: weapon.speed,
         }
 
         bullets.push(bullet)
@@ -73,6 +77,9 @@ export class CombatSystem {
         rotation: data.angle,
         damage: weapon.damage,
         weapon: weapon.id,
+        spawnTime: now,
+        range: weapon.range,
+        speed: weapon.speed,
       }
 
       bullets.push(bullet)
@@ -112,16 +119,32 @@ export class CombatSystem {
 
   // Validate and apply bullet hit (client reports, server validates)
   validateHit(shooter, bulletId, targetId, damage) {
+    // Create unique hit key to prevent duplicate processing
+    const hitKey = `${bulletId}_${targetId}`
+    if (this.processedHits.has(hitKey)) {
+      return null // Already processed
+    }
+
     // Get target
     const target = this.gameState.getPlayerById(targetId)
     if (!target || target.isDead) {
       return null
     }
 
-    // Validate bullet exists
-    const bullet = this.gameState.bulletManager.getBullet(bulletId)
-    if (!bullet || bullet.playerId !== shooter.id) {
+    // Validate bullet ownership from bulletId format: "playerId_timestamp_index"
+    const bulletOwnerId = parseInt(bulletId.split('_')[0])
+    if (bulletOwnerId !== shooter.id) {
+      console.log(`❌ Bullet owner mismatch: bulletOwnerId=${bulletOwnerId}, shooter.id=${shooter.id}`)
       return null
+    }
+
+    // Mark hit as processed
+    this.processedHits.add(hitKey)
+
+    // Cleanup old hits (keep last 1000)
+    if (this.processedHits.size > 1000) {
+      const entries = Array.from(this.processedHits)
+      entries.slice(0, 500).forEach((key) => this.processedHits.delete(key))
     }
 
     // Apply damage

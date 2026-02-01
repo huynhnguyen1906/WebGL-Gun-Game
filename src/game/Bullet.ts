@@ -13,6 +13,7 @@ const BulletState = {
 type BulletStateType = (typeof BulletState)[keyof typeof BulletState]
 
 export class Bullet {
+  public id: string // Unique bullet ID from server
   private graphics: PIXI.Graphics
   public x: number // Head position
   public y: number
@@ -23,7 +24,7 @@ export class Bullet {
   private angle: number
   private speed: number
   private ttl: number // time to live (seconds)
-  private maxTTL: number
+  public maxTTL: number
   public isAlive: boolean = true
   public damage: number
   public owner: BaseEntity
@@ -37,27 +38,43 @@ export class Bullet {
   constructor(
     x: number,
     y: number,
-    angle: number,
-    speed: number,
+    angleOrVx: number, // Can be angle (when speed provided) or vx (when vy provided)
+    speedOrVy: number, // Can be speed (when angle provided) or vy (when vx provided)
     range: number,
     damage: number = 0,
-    owner: BaseEntity
+    owner: BaseEntity,
+    id?: string // Optional ID from server
   ) {
+    // Use server ID if provided, otherwise generate client-side ID
+    this.id = id || `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     this.x = x
     this.y = y
     this.tailX = x
     this.tailY = y
-    this.angle = angle
-    this.speed = speed
     this.damage = damage
     this.owner = owner
 
-    // Calculate velocity from angle
-    this.vx = Math.cos(angle) * speed
-    this.vy = Math.sin(angle) * speed
+    // Check if we got vx,vy (server bullets) or angle,speed (client bullets)
+    // If angleOrVx is between -PI and PI, it's likely an angle
+    // Otherwise it's vx (which is speed * cos(angle), typically larger)
+    const isVelocityMode = Math.abs(angleOrVx) > Math.PI || Math.abs(speedOrVy) > 100
+
+    if (isVelocityMode) {
+      // Server mode: direct vx, vy
+      this.vx = angleOrVx
+      this.vy = speedOrVy
+      this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy)
+      this.angle = Math.atan2(this.vy, this.vx)
+    } else {
+      // Client mode: angle and speed
+      this.angle = angleOrVx
+      this.speed = speedOrVy
+      this.vx = Math.cos(this.angle) * this.speed
+      this.vy = Math.sin(this.angle) * this.speed
+    }
 
     // TTL = RANGE / SPEED (seconds)
-    this.maxTTL = range / speed
+    this.maxTTL = range / this.speed
     this.ttl = this.maxTTL
 
     // Create graphics container
@@ -209,6 +226,11 @@ export class Bullet {
   // Called when bullet hits - immediately mark for shrinking
   public onHit(): void {
     this.startShrinking()
+  }
+
+  // Set TTL (used when creating from server data with elapsed time)
+  public setTTL(newTTL: number): void {
+    this.ttl = Math.max(0, newTTL)
   }
 
   getGraphics(): PIXI.Graphics {
